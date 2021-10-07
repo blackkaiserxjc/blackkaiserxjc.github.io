@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>hexo on Black Kaiser&#39;s Blog</title>
+    <link>https://blackkaiserxjc.github.io/tags/hexo/</link>
+    <description>Recent content in hexo on Black Kaiser&#39;s Blog</description>
+    <generator>Hugo -- gohugo.io</generator>
+    <language>zh-CN</language>
+    <lastBuildDate>Sun, 01 Sep 2019 12:55:15 +0000</lastBuildDate><atom:link href="https://blackkaiserxjc.github.io/tags/hexo/index.xml" rel="self" type="application/rss+xml" />
+    <item>
+      <title>如何在Hexo中添加本地图片</title>
+      <link>https://blackkaiserxjc.github.io/post/hexo-image/</link>
+      <pubDate>Sun, 01 Sep 2019 12:55:15 +0000</pubDate>
+      
+      <guid>https://blackkaiserxjc.github.io/post/hexo-image/</guid>
+      <description>&lt;p&gt;在写如何修改Hexo的主题时，需要插入一些本地的截图到文章中，在本地编辑文章的时候自然可以将本地图片的链接插入到文章中，但这就面临一个问题：&lt;strong&gt;本地的链接在文章发布之后必然失效，该怎么办?&lt;/strong&gt;&lt;/p&gt;
+&lt;p&gt;按照经验，解决的办法自然是将图片上传到某个图片空间，然后将图片空间中图片的链接插入文章中。&lt;/p&gt;
+&lt;p&gt;这当然可以解决问题，但是未免太麻烦。&lt;/p&gt;
+&lt;p&gt;然而，虽然接触Hexo才短短两天时间，但是有一点我是肯定的：
+如果一个产品不能足够简洁高效的解决一些我们应用中经常要遇到的问题的话，那么它一定不能流行起来。&lt;/p&gt;
+&lt;p&gt;Hexo无疑流行起来了，所以它一定有自己的解决之道。
+事实的确如此。我毫不费力的便找到了Hexo添加本地图片，并同步发布到线上的解决方法。&lt;/p&gt;</description>
+    </item>
+    
+  </channel>
+</rss>

@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>c/c&#43;&#43; on Black Kaiser&#39;s Blog</title>
+    <link>https://blackkaiserxjc.github.io/categories/c/c&#43;&#43;/</link>
+    <description>Recent content in c/c&#43;&#43; on Black Kaiser&#39;s Blog</description>
+    <generator>Hugo -- gohugo.io</generator>
+    <language>zh-CN</language><atom:link href="https://blackkaiserxjc.github.io/categories/c/c++/index.xml" rel="self" type="application/rss+xml" />
+    <item>
+      <title>C/C&#43;&#43;函数栈</title>
+      <link>https://blackkaiserxjc.github.io/post/c-cpp-function/</link>
+      <pubDate>Sat, 25 Apr 2020 22:53:15 +0000</pubDate>
+      
+      <guid>https://blackkaiserxjc.github.io/post/c-cpp-function/</guid>
+      <description>&lt;p&gt;内存模型这是很大的话题，纯c的模型还简单一点，C++则是各种麻烦事儿&lt;code&gt;vptr&lt;/code&gt;, &lt;code&gt;vtable&lt;/code&gt;, &lt;code&gt;virtual deived&lt;/code&gt;，&lt;code&gt;多继承&lt;/code&gt;，&lt;code&gt;构造&lt;/code&gt;，&lt;code&gt;析构&lt;/code&gt;，&lt;code&gt;复制构造&lt;/code&gt;在背后都对我的程序的内存里面做啦些什么?&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;为什么返回对象效率会那么低?&lt;/li&gt;
+&lt;li&gt;为什么C++做二进制会那么难?&lt;/li&gt;
+&lt;li&gt;那些成员函数和我学C语言的普通函数有啥不一样?&lt;/li&gt;
+&lt;li&gt;编译器到底做啦些神马？&lt;/li&gt;
+&lt;/ul&gt;</description>
+    </item>
+    
+    <item>
+      <title>c&#43;&#43;11 lambda如何实现的?</title>
+      <link>https://blackkaiserxjc.github.io/post/c-17-lambda/</link>
+      <pubDate>Wed, 02 Oct 2019 12:55:15 +0000</pubDate>
+      
+      <guid>https://blackkaiserxjc.github.io/post/c-17-lambda/</guid>
+      <description>&lt;p&gt;其实是编译器为我们了创建了一个类，这个类重载了()，让我们可以像调用函数一样使用。所以，你写的lambda表达式和真正的实现，是这个样子的:&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;https://hadesxjc.oss-cn-beijing.aliyuncs.com/img/image_thumb.png&#34; alt=&#34;usercode&#34;&gt;&lt;/p&gt;</description>
+    </item>
+    
+  </channel>
+</rss>

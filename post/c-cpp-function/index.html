@@ -1,0 +1,1074 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en-us">
+<head>
+  <meta http-equiv="content-type" content="text/html; charset=utf-8">
+
+  
+  <meta name="viewport" content="width=device-width,minimum-scale=1,maximum-scale=1">
+
+  
+    
+    
+      <link href="/css/fonts.css" rel="stylesheet" type="text/css">
+    
+  
+
+  
+  <title>C/C&#43;&#43;函数栈</title>
+
+  
+  
+  <link rel="stylesheet" href="/css/hugo-octopress.css">
+
+  
+  
+
+  
+    <link rel="stylesheet" href="/css/fork-awesome.min.css">
+  
+
+  
+  <link href="https://blackkaiserxjc.github.io/favicon.png" rel="icon">
+
+  
+  
+
+  <meta name="description" content="" />
+  <meta name="keywords" content="">
+  <meta name="author" content="">
+
+  
+  <meta name="generator" content="Hugo 0.88.1" />
+
+  
+  
+
+  
+  
+
+  
+  
+
+
+
+</head>
+<body>
+
+
+<header role="banner">
+<hgroup>
+  
+  <h1><a href="https://blackkaiserxjc.github.io/">Black Kaiser&#39;s Blog</a></h1>
+    <h2></h2>
+</hgroup></header>
+
+
+<nav role="navigation">
+<fieldset class="mobile-nav">
+  
+  <select onchange="location = this.value;">
+    <option value="">Navigate…</option>
+      
+        <option value="https://blackkaiserxjc.github.io/archive/">» Archive</option>
+      
+        <option value="https://blackkaiserxjc.github.io/">» Blog</option>
+      
+        <option value="https://blackkaiserxjc.github.io/about/">» About</option>
+      
+  </select>
+</fieldset>
+
+
+<ul class="main-navigation">
+  
+  
+    
+      <li><a href="https://blackkaiserxjc.github.io/archive/" title="Archive"  rel="noopener noreferrer">Archive</a></li>
+    
+  
+    
+      <li><a href="https://blackkaiserxjc.github.io/" title="Blog">Blog</a></li>
+    
+  
+    
+      <li><a href="https://blackkaiserxjc.github.io/about/" title="About"  rel="noopener noreferrer">About</a></li>
+    
+  
+</ul>
+
+<ul class="subscription">
+  
+    
+        <a href="https://blackkaiserxjc.github.io/index.xml" target="_blank" type="application/rss+xml" title="RSS" rel="noopener noreferrer"><i class="fa fa-rss-square fa-lg"></i></a>
+    
+  
+</ul>
+
+
+</nav>
+
+
+<div id="main">
+  <div id="content">
+    <div>
+      <article class="hentry" role="article">
+
+        
+        
+
+<header>
+  <p class="meta">Apr 25, 2020
+     - 10 minute read 
+    
+
+    
+    
+      - <a class="label" href="https://blackkaiserxjc.github.io/categories/c/c&#43;&#43;/">c/c&#43;&#43; </a>
+    
+  </p>
+  <h1 class="entry-title">
+    <a href="https://blackkaiserxjc.github.io/post/c-cpp-function/">C/C&#43;&#43;函数栈</a>
+  </h1>
+</header>
+
+
+        <div class="entry-content">
+          
+          
+          
+          <p>内存模型这是很大的话题，纯c的模型还简单一点，C++则是各种麻烦事儿<code>vptr</code>, <code>vtable</code>, <code>virtual deived</code>，<code>多继承</code>，<code>构造</code>，<code>析构</code>，<code>复制构造</code>在背后都对我的程序的内存里面做啦些什么?</p>
+<ul>
+<li>为什么返回对象效率会那么低?</li>
+<li>为什么C++做二进制会那么难?</li>
+<li>那些成员函数和我学C语言的普通函数有啥不一样?</li>
+<li>编译器到底做啦些神马？</li>
+</ul>
+<p><strong>Let&rsquo;s Go Party!</strong></p>
+<h3 id="0x00-栈和函数调用">0x00 栈和函数调用</h3>
+<p>什么是<strong>栈</strong>? 就是数据结构里面那个<strong>LIFO</strong>的家伙?<br>
+yeah! 从数据结构角度是这样的. 对于基于栈的计算机系统而已, 栈是存储局部变量和进行函数调用所必不可少的连续内存区域.<br>
+<strong>编译器</strong>,<strong>操作系统</strong>和<strong>CPU</strong>按照规范各尽其责,保证正确合理的使用栈.</p>
+<blockquote>
+<p>可以先考虑下这两个问题:</p>
+<ul>
+<li>当函数执行时候，程序流程会转到函数体的实现地址，只有遇见return语句或者&quot;}&ldquo;符号才能返回到下一句的地址处，请问编译器是如何确定应该回到什么地址处呢？</li>
+<li>为什么很多高级语言在传递参数的时候会执行将实参复制到形参这一操作呢？</li>
+</ul>
+</blockquote>
+<h3 id="0x01-栈帧">0x01 栈帧</h3>
+<p><strong>栈</strong>在内存中就是一块特殊的存储空间，原则上<em><strong>先进后出</strong></em>,即最先被存储的数据最后被释放.<br>
+汇编过程就是<code>push</code>指令和<code>pop</code>指令对栈空间数据压入和数据弹出。<br>
+好吧，空口无凭确实有点说不过去。那就从简单的<code>main</code>来看看。</p>
+<div class="highlight"><pre tabindex="0" style="background-color:#f8f8f8;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-cpp" data-lang="cpp"><span style="color:#8f5902;font-style:italic">//hello.cc
+</span><span style="color:#8f5902;font-style:italic"></span><span style="color:#204a87;font-weight:bold">int</span> <span style="color:#000">_tmain</span><span style="color:#000;font-weight:bold">(</span><span style="color:#204a87;font-weight:bold">int</span> <span style="color:#000">argc</span><span style="color:#000;font-weight:bold">,</span> <span style="color:#000">_TCHAR</span><span style="color:#ce5c00;font-weight:bold">*</span> <span style="color:#000">argv</span><span style="color:#000;font-weight:bold">[])</span>
+<span style="color:#000;font-weight:bold">{</span>
+	<span style="color:#204a87;font-weight:bold">return</span> <span style="color:#0000cf;font-weight:bold">0</span><span style="color:#000;font-weight:bold">;</span>
+<span style="color:#000;font-weight:bold">}</span>
+</code></pre></div><p>来我们看看这货的反汇编看看真相。</p>
+<div class="highlight"><pre tabindex="0" style="background-color:#f8f8f8;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-cpp" data-lang="cpp"><span style="color:#204a87;font-weight:bold">int</span> <span style="color:#000">_tmain</span><span style="color:#000;font-weight:bold">(</span><span style="color:#204a87;font-weight:bold">int</span> <span style="color:#000">argc</span><span style="color:#000;font-weight:bold">,</span> <span style="color:#000">_TCHAR</span><span style="color:#ce5c00;font-weight:bold">*</span> <span style="color:#000">argv</span><span style="color:#000;font-weight:bold">[])</span>
+<span style="color:#000;font-weight:bold">{</span>
+<span style="color:#0000cf;font-weight:bold">00411360</span> <span style="color:#0000cf;font-weight:bold">55</span>               <span style="color:#000">push</span>        <span style="color:#000">ebp</span>  
+<span style="color:#0000cf;font-weight:bold">00411361</span> <span style="color:#0000cf;font-weight:bold">8</span><span style="color:#000">B</span> <span style="color:#000">EC</span>            <span style="color:#000">mov</span>         <span style="color:#000">ebp</span><span style="color:#000;font-weight:bold">,</span><span style="color:#000">esp</span> 
+<span style="color:#0000cf;font-weight:bold">00411363</span> <span style="color:#0000cf;font-weight:bold">81</span> <span style="color:#000">EC</span> <span style="color:#000">C0</span> <span style="color:#0000cf;font-weight:bold">00</span> <span style="color:#0000cf;font-weight:bold">00</span> <span style="color:#0000cf;font-weight:bold">00</span> <span style="color:#000">sub</span>         <span style="color:#000">esp</span><span style="color:#000;font-weight:bold">,</span><span style="color:#0000cf;font-weight:bold">0</span><span style="color:#000">C0h</span> 
+<span style="color:#0000cf;font-weight:bold">0041136</span><span style="color:#0000cf;font-weight:bold">9</span> <span style="color:#0000cf;font-weight:bold">53</span>               <span style="color:#000">push</span>        <span style="color:#000">ebx</span>  
+<span style="color:#0000cf;font-weight:bold">0041136</span><span style="color:#000">A</span> <span style="color:#0000cf;font-weight:bold">56</span>               <span style="color:#000">push</span>        <span style="color:#000">esi</span>  
+<span style="color:#0000cf;font-weight:bold">0041136</span><span style="color:#000">B</span> <span style="color:#0000cf;font-weight:bold">57</span>               <span style="color:#000">push</span>        <span style="color:#000">edi</span>  
+<span style="color:#0000cf;font-weight:bold">0041136</span><span style="color:#000">C</span> <span style="color:#0000cf;font-weight:bold">8</span><span style="color:#000">D</span> <span style="color:#000">BD</span> <span style="color:#0000cf;font-weight:bold">40</span> <span style="color:#000">FF</span> <span style="color:#000">FF</span> <span style="color:#000">FF</span> <span style="color:#000">lea</span>         <span style="color:#000">edi</span><span style="color:#000;font-weight:bold">,[</span><span style="color:#000">ebp</span><span style="color:#ce5c00;font-weight:bold">-</span><span style="color:#0000cf;font-weight:bold">0</span><span style="color:#000">C0h</span><span style="color:#000;font-weight:bold">]</span> 
+<span style="color:#0000cf;font-weight:bold">00411372</span> <span style="color:#000">B9</span> <span style="color:#0000cf;font-weight:bold">30</span> <span style="color:#0000cf;font-weight:bold">00</span> <span style="color:#0000cf;font-weight:bold">00</span> <span style="color:#0000cf;font-weight:bold">00</span>   <span style="color:#000">mov</span>         <span style="color:#000">ecx</span><span style="color:#000;font-weight:bold">,</span><span style="color:#0000cf;font-weight:bold">30</span><span style="color:#000">h</span> 
+<span style="color:#0000cf;font-weight:bold">00411377</span> <span style="color:#000">B8</span> <span style="color:#000">CC</span> <span style="color:#000">CC</span> <span style="color:#000">CC</span> <span style="color:#000">CC</span>   <span style="color:#000">mov</span>         <span style="color:#000">eax</span><span style="color:#000;font-weight:bold">,</span><span style="color:#0000cf;font-weight:bold">0</span><span style="color:#000">CCCCCCCCh</span> 
+<span style="color:#0000cf;font-weight:bold">0041137</span><span style="color:#000">C</span> <span style="color:#000">F3</span> <span style="color:#000">AB</span>            <span style="color:#000">rep</span> <span style="color:#000">stos</span>    <span style="color:#000">dword</span> <span style="color:#000">ptr</span> <span style="color:#f57900">es</span><span style="color:#000;font-weight:bold">:[</span><span style="color:#000">edi</span><span style="color:#000;font-weight:bold">]</span> 
+	<span style="color:#204a87;font-weight:bold">return</span> <span style="color:#0000cf;font-weight:bold">0</span><span style="color:#000;font-weight:bold">;</span>
+<span style="color:#0000cf;font-weight:bold">0041137</span><span style="color:#000">E</span> <span style="color:#0000cf;font-weight:bold">33</span> <span style="color:#000">C0</span>            <span style="color:#000">xor</span>         <span style="color:#000">eax</span><span style="color:#000;font-weight:bold">,</span><span style="color:#000">eax</span> 
+<span style="color:#000;font-weight:bold">}</span>
+<span style="color:#0000cf;font-weight:bold">004113</span><span style="color:#0000cf;font-weight:bold">80</span> <span style="color:#0000cf;font-weight:bold">5F</span>               <span style="color:#000">pop</span>         <span style="color:#000">edi</span>  
+<span style="color:#0000cf;font-weight:bold">004113</span><span style="color:#0000cf;font-weight:bold">81</span> <span style="color:#0000cf;font-weight:bold">5</span><span style="color:#000">E</span>               <span style="color:#000">pop</span>         <span style="color:#000">esi</span>  
+<span style="color:#0000cf;font-weight:bold">004113</span><span style="color:#0000cf;font-weight:bold">82</span> <span style="color:#0000cf;font-weight:bold">5</span><span style="color:#000">B</span>               <span style="color:#000">pop</span>         <span style="color:#000">ebx</span>  
+<span style="color:#0000cf;font-weight:bold">004113</span><span style="color:#0000cf;font-weight:bold">83</span> <span style="color:#0000cf;font-weight:bold">8</span><span style="color:#000">B</span> <span style="color:#000">E5</span>            <span style="color:#000">mov</span>         <span style="color:#000">esp</span><span style="color:#000;font-weight:bold">,</span><span style="color:#000">ebp</span> 
+<span style="color:#0000cf;font-weight:bold">004113</span><span style="color:#0000cf;font-weight:bold">85</span> <span style="color:#0000cf;font-weight:bold">5</span><span style="color:#000">D</span>               <span style="color:#000">pop</span>         <span style="color:#000">ebp</span>  
+<span style="color:#0000cf;font-weight:bold">004113</span><span style="color:#0000cf;font-weight:bold">86</span> <span style="color:#000">C3</span>               <span style="color:#000">ret</span>  
+</code></pre></div><p>卧槽，这不科学，我一句话都没写啊，编译器都干的这么多活儿. 且听老夫与你徐徐道来.<br>
+<code>push</code>, <code>pop</code>, <code>xor</code>这种基本的汇编指令不在这里做太多解释, 自行google.<br>
+咱们只说关键的 <code>esp</code>, <code>ebp</code>. <code>esp</code>俗称<em><strong>栈顶指针</strong></em>，<code>ebp</code>俗称<em><strong>栈底指针</strong></em>。<br>
+在栈结构中，每4个字节的栈空间保存一个数据，栈顶和栈底之间的空间学名 <strong>栈帧</strong>.</p>
+<blockquote>
+<p>那<strong>栈帧</strong>怎样形成呢?</p>
+<ul>
+<li>当<code>esp</code>小于<code>ebp</code>时，就形成栈帧。</li>
+<li>通常, 栈帧中可以寻址的数据有<code>局部变量</code>,<code>函数返回地址</code>,<code>函数参数</code>等.   &gt; 不同的两次函数调用,所形成的<code>栈帧</code>也不相同。</li>
+<li>当一个函数进入另外一个函数中时,就会针对调用的函数开辟出其所需的栈空间,形成函数的栈帧.</li>
+<li>当这个函数调用结果时,需要清理掉所使用的栈空间,关闭栈帧，通常把这个过程成为<strong>栈平衡</strong>，俗称**&ldquo;有借有还再借不难&rdquo;**.</li>
+</ul>
+</blockquote>
+<p>好吧,这过程确实有点放高利贷赶脚,那要是它<code>借啦不还</code>咋办啊?<br>
+<strong>Bingo!</strong> 确实需要执法人员来维护,其实我更喜欢叫打手,通常在<em><strong>VC Debug</strong></em>模式下确实存在这种检查,<code>__chkesp</code> debug下特有的东西,用于检查栈平衡.如果不平衡就抛出异常,调到<code>_CrtDbgReport</code>.</p>
+<h3 id="0x02-调用约定">0x02 <strong>调用约定</strong></h3>
+<p>所谓无规矩不成方圆,函数要调用同样也必须遵循一定的规则的,学名<strong>调用约定</strong>.<br>
+就VC++环境下调用约定基本上就三种:<code>_cdecl</code>, <code>_stdcall</code>, <code>_fastcall</code>. 可能有同学会说不对啊, 我记得好像还有什么<code>thiscall</code>, <code>__pascal</code>之类的. 好吧, <code>thiscall</code>准确说不能算正统的调用约定，<code>__pascal</code>这种基本过时就不扯啦.</p>
+<blockquote>
+<p>三种基本的调用约定如下：</p>
+</blockquote>
+<ul>
+<li><strong>_cdecl</strong>: c/c++默认的函数调用约定，不定参数的函数可以使用.</li>
+<li><strong>_stdcall</strong>: 被调用放平衡栈，不定参数的函数无法使用.</li>
+<li><strong>_fastcall</strong>: 寄存器方式传参数，被调用放平衡栈，不定参数的函数无法使用.</li>
+</ul>
+<p>测试代码如下:</p>
+<div class="highlight"><pre tabindex="0" style="background-color:#f8f8f8;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-cpp" data-lang="cpp"><span style="color:#8f5902;font-style:italic">#include</span> <span style="color:#8f5902;font-style:italic">&lt;stdio.h&gt;</span><span style="color:#8f5902;font-style:italic">
+</span><span style="color:#8f5902;font-style:italic">#include</span> <span style="color:#8f5902;font-style:italic">&lt;stdlib.h&gt;</span><span style="color:#8f5902;font-style:italic">
+</span><span style="color:#8f5902;font-style:italic"></span>
+<span style="color:#8f5902;font-style:italic">#include</span> <span style="color:#8f5902;font-style:italic">&lt;iostream&gt;</span><span style="color:#8f5902;font-style:italic">
+</span><span style="color:#8f5902;font-style:italic"></span><span style="color:#204a87;font-weight:bold">using</span> <span style="color:#204a87;font-weight:bold">namespace</span> <span style="color:#000">std</span><span style="color:#000;font-weight:bold">;</span>
+
+<span style="color:#8f5902;font-style:italic">#ifdef _MSC_VER
+</span><span style="color:#8f5902;font-style:italic">#include</span> <span style="color:#8f5902;font-style:italic">&lt;Windows.h&gt;</span><span style="color:#8f5902;font-style:italic">
+</span><span style="color:#8f5902;font-style:italic">#include</span> <span style="color:#8f5902;font-style:italic">&lt;DbgHelp.h&gt;</span><span style="color:#8f5902;font-style:italic">
+</span><span style="color:#8f5902;font-style:italic">#pragma comment(lib, &#34;Dbghelp.lib&#34;)
+</span><span style="color:#8f5902;font-style:italic">#endif
+</span><span style="color:#8f5902;font-style:italic"></span><span style="color:#204a87;font-weight:bold">namespace</span> <span style="color:#000">Oranage</span>
+<span style="color:#000;font-weight:bold">{</span>
+	<span style="color:#204a87;font-weight:bold">int</span> <span style="color:#000">nVar</span> <span style="color:#ce5c00;font-weight:bold">=</span> <span style="color:#0000cf;font-weight:bold">110</span><span style="color:#000;font-weight:bold">;</span>
+	<span style="color:#204a87;font-weight:bold">int</span> <span style="color:#000">fract</span><span style="color:#000;font-weight:bold">(</span><span style="color:#204a87;font-weight:bold">int</span> <span style="color:#000">n</span><span style="color:#000;font-weight:bold">)</span>
+	<span style="color:#000;font-weight:bold">{</span>
+		<span style="color:#204a87;font-weight:bold">return</span> <span style="color:#000">n</span> <span style="color:#ce5c00;font-weight:bold">==</span> <span style="color:#0000cf;font-weight:bold">1</span> <span style="color:#ce5c00;font-weight:bold">?</span> <span style="color:#0000cf;font-weight:bold">1</span><span style="color:#ce5c00;font-weight:bold">:</span> <span style="color:#000">n</span> <span style="color:#ce5c00;font-weight:bold">*</span> <span style="color:#000">fract</span><span style="color:#000;font-weight:bold">(</span><span style="color:#000">n</span><span style="color:#ce5c00;font-weight:bold">-</span><span style="color:#0000cf;font-weight:bold">1</span><span style="color:#000;font-weight:bold">);</span>
+	<span style="color:#000;font-weight:bold">}</span>
+<span style="color:#000;font-weight:bold">}</span>
+
+<span style="color:#204a87;font-weight:bold">void</span> <span style="color:#000">_stdcall</span> <span style="color:#000">ShowStd</span><span style="color:#000;font-weight:bold">(</span><span style="color:#204a87;font-weight:bold">int</span> <span style="color:#000">nNum</span><span style="color:#000;font-weight:bold">)</span>
+<span style="color:#000;font-weight:bold">{</span>
+	<span style="color:#000">printf</span><span style="color:#000;font-weight:bold">(</span><span style="color:#4e9a06">&#34;%d</span><span style="color:#4e9a06">\r\n</span><span style="color:#4e9a06">&#34;</span><span style="color:#000;font-weight:bold">,</span><span style="color:#000">nNum</span><span style="color:#000;font-weight:bold">);</span>
+<span style="color:#000;font-weight:bold">}</span>
+
+<span style="color:#204a87;font-weight:bold">void</span> <span style="color:#000">_cdecl</span> <span style="color:#000">ShowCde</span><span style="color:#000;font-weight:bold">(</span><span style="color:#204a87;font-weight:bold">int</span> <span style="color:#000">nNum</span><span style="color:#000;font-weight:bold">)</span>
+<span style="color:#000;font-weight:bold">{</span>
+	<span style="color:#000">printf</span><span style="color:#000;font-weight:bold">(</span><span style="color:#4e9a06">&#34;%d</span><span style="color:#4e9a06">\r\n</span><span style="color:#4e9a06">&#34;</span><span style="color:#000;font-weight:bold">,</span> <span style="color:#000">nNum</span><span style="color:#000;font-weight:bold">);</span>
+<span style="color:#000;font-weight:bold">}</span>
+
+<span style="color:#8f5902;font-style:italic">// 这个只是vc验证命名修饰
+</span><span style="color:#8f5902;font-style:italic">// gcc下使用c++filt工具
+</span><span style="color:#8f5902;font-style:italic"></span>
+<span style="color:#8f5902;font-style:italic">#ifdef _MSC_VER
+</span><span style="color:#8f5902;font-style:italic"></span>
+<span style="color:#204a87;font-weight:bold">void</span> <span style="color:#000">DecodeSymbol</span><span style="color:#000;font-weight:bold">()</span>
+<span style="color:#000;font-weight:bold">{</span>
+	<span style="color:#204a87;font-weight:bold">char</span> <span style="color:#000">szCopy</span><span style="color:#000;font-weight:bold">[</span><span style="color:#0000cf;font-weight:bold">256</span><span style="color:#000;font-weight:bold">]</span> <span style="color:#ce5c00;font-weight:bold">=</span> <span style="color:#000;font-weight:bold">{</span> <span style="color:#0000cf;font-weight:bold">0</span> <span style="color:#000;font-weight:bold">};</span>
+	<span style="color:#204a87;font-weight:bold">char</span> <span style="color:#000">szBuffer</span><span style="color:#000;font-weight:bold">[</span><span style="color:#0000cf;font-weight:bold">256</span><span style="color:#000;font-weight:bold">]</span> <span style="color:#ce5c00;font-weight:bold">=</span><span style="color:#000;font-weight:bold">{</span> <span style="color:#0000cf;font-weight:bold">0</span> <span style="color:#000;font-weight:bold">};</span>
+	<span style="color:#204a87;font-weight:bold">while</span> <span style="color:#000;font-weight:bold">(</span><span style="color:#ce5c00;font-weight:bold">~</span><span style="color:#000">scanf</span><span style="color:#000;font-weight:bold">(</span><span style="color:#4e9a06">&#34;%s&#34;</span><span style="color:#000;font-weight:bold">,</span> <span style="color:#000">szBuffer</span><span style="color:#000;font-weight:bold">))</span>
+	<span style="color:#000;font-weight:bold">{</span>
+		<span style="color:#000">UnDecorateSymbolName</span><span style="color:#000;font-weight:bold">(</span><span style="color:#000">szBuffer</span><span style="color:#000;font-weight:bold">,</span> <span style="color:#000">szCopy</span><span style="color:#000;font-weight:bold">,</span> <span style="color:#0000cf;font-weight:bold">256</span> <span style="color:#000;font-weight:bold">,</span> <span style="color:#0000cf;font-weight:bold">0</span><span style="color:#000;font-weight:bold">);</span>
+		<span style="color:#000">printf</span><span style="color:#000;font-weight:bold">(</span><span style="color:#4e9a06">&#34;%s</span><span style="color:#4e9a06">\n</span><span style="color:#4e9a06">&#34;</span><span style="color:#000;font-weight:bold">,</span><span style="color:#000">szCopy</span><span style="color:#000;font-weight:bold">);</span>
+	<span style="color:#000;font-weight:bold">}</span>
+<span style="color:#000;font-weight:bold">}</span>
+<span style="color:#8f5902;font-style:italic">#endif
+</span><span style="color:#8f5902;font-style:italic"></span>
+<span style="color:#8f5902;font-style:italic">// orange::nVar   ?nVar@Oranage@@3HA;
+</span><span style="color:#8f5902;font-style:italic"></span>
+<span style="color:#204a87;font-weight:bold">extern</span> <span style="color:#4e9a06">&#34;C&#34;</span> <span style="color:#204a87;font-weight:bold">int</span> <span style="color:#000">_ZN7Oranage4nVarE</span><span style="color:#000;font-weight:bold">;</span>
+<span style="color:#204a87;font-weight:bold">int</span> <span style="color:#000">main</span><span style="color:#000;font-weight:bold">()</span>
+<span style="color:#000;font-weight:bold">{</span>
+	<span style="color:#000">ShowStd</span><span style="color:#000;font-weight:bold">(</span><span style="color:#a40000">&#39;</span><span style="color:#0000cf;font-weight:bold">123</span><span style="color:#a40000">&#39;</span><span style="color:#000;font-weight:bold">);</span>
+	<span style="color:#000">ShowCde</span><span style="color:#000;font-weight:bold">(</span><span style="color:#a40000">&#39;</span><span style="color:#0000cf;font-weight:bold">234</span><span style="color:#a40000">&#39;</span><span style="color:#000;font-weight:bold">);</span>
+<span style="color:#8f5902;font-style:italic">#ifdef _MSC_VER
+</span><span style="color:#8f5902;font-style:italic"></span>	<span style="color:#000">DecodeSymbol</span><span style="color:#000;font-weight:bold">();</span>
+<span style="color:#8f5902;font-style:italic">#else
+</span><span style="color:#8f5902;font-style:italic"></span>	<span style="color:#000">cout</span> <span style="color:#ce5c00;font-weight:bold">&lt;&lt;</span> <span style="color:#000">_ZN7Oranage4nVarE</span> <span style="color:#ce5c00;font-weight:bold">&lt;&lt;</span><span style="color:#000">endl</span><span style="color:#000;font-weight:bold">;</span>
+<span style="color:#8f5902;font-style:italic">#endif
+</span><span style="color:#8f5902;font-style:italic"></span>	<span style="color:#000">cout</span> <span style="color:#ce5c00;font-weight:bold">&lt;&lt;</span> <span style="color:#000">Oranage</span><span style="color:#ce5c00;font-weight:bold">::</span><span style="color:#000">nVar</span><span style="color:#ce5c00;font-weight:bold">&lt;&lt;</span><span style="color:#000">endl</span><span style="color:#000;font-weight:bold">;</span>
+	<span style="color:#000">cout</span> <span style="color:#ce5c00;font-weight:bold">&lt;&lt;</span> <span style="color:#000">Oranage</span><span style="color:#ce5c00;font-weight:bold">::</span><span style="color:#000">fract</span><span style="color:#000;font-weight:bold">(</span><span style="color:#0000cf;font-weight:bold">5</span><span style="color:#000;font-weight:bold">)</span> <span style="color:#ce5c00;font-weight:bold">&lt;&lt;</span><span style="color:#000">endl</span><span style="color:#000;font-weight:bold">;</span>
+	<span style="color:#204a87;font-weight:bold">int</span> <span style="color:#000">a</span> <span style="color:#ce5c00;font-weight:bold">=</span> <span style="color:#0000cf;font-weight:bold">1</span><span style="color:#000;font-weight:bold">,</span> <span style="color:#000">b</span> <span style="color:#ce5c00;font-weight:bold">=</span> <span style="color:#0000cf;font-weight:bold">1</span><span style="color:#000;font-weight:bold">;</span>
+
+	<span style="color:#000">cout</span> <span style="color:#ce5c00;font-weight:bold">&lt;&lt;</span> <span style="color:#000">a</span><span style="color:#ce5c00;font-weight:bold">++</span> <span style="color:#ce5c00;font-weight:bold">&lt;&lt;</span> <span style="color:#ce5c00;font-weight:bold">++</span><span style="color:#000">a</span> <span style="color:#ce5c00;font-weight:bold">&lt;&lt;</span> <span style="color:#000">a</span><span style="color:#ce5c00;font-weight:bold">++</span> <span style="color:#ce5c00;font-weight:bold">&lt;&lt;</span><span style="color:#000">endl</span><span style="color:#000;font-weight:bold">;</span>
+	<span style="color:#000">printf</span><span style="color:#000;font-weight:bold">(</span><span style="color:#4e9a06">&#34;%d%d %d&#34;</span><span style="color:#000;font-weight:bold">,</span> <span style="color:#000">a</span><span style="color:#ce5c00;font-weight:bold">++</span><span style="color:#000;font-weight:bold">,</span> <span style="color:#ce5c00;font-weight:bold">++</span><span style="color:#000">a</span><span style="color:#000;font-weight:bold">,</span> <span style="color:#000">a</span><span style="color:#ce5c00;font-weight:bold">++</span><span style="color:#000;font-weight:bold">);</span>
+
+	<span style="color:#204a87;font-weight:bold">return</span> <span style="color:#0000cf;font-weight:bold">0</span><span style="color:#000;font-weight:bold">;</span>
+<span style="color:#000;font-weight:bold">}</span>
+
+<span style="color:#8f5902;font-style:italic">// _stdcall
+</span><span style="color:#8f5902;font-style:italic"></span><span style="color:#204a87;font-weight:bold">void</span> <span style="color:#000">_stdcall</span> <span style="color:#000">ShowStd</span><span style="color:#000;font-weight:bold">(</span><span style="color:#204a87;font-weight:bold">int</span> <span style="color:#000">nNum</span><span style="color:#000;font-weight:bold">)</span>
+<span style="color:#0000cf;font-weight:bold">004114</span><span style="color:#0000cf;font-weight:bold">99</span> <span style="color:#0000cf;font-weight:bold">5F</span>               <span style="color:#000">pop</span>         <span style="color:#000">edi</span>  
+<span style="color:#0000cf;font-weight:bold">004114</span><span style="color:#0000cf;font-weight:bold">9</span><span style="color:#000">A</span> <span style="color:#0000cf;font-weight:bold">5</span><span style="color:#000">E</span>               <span style="color:#000">pop</span>         <span style="color:#000">esi</span>  
+<span style="color:#0000cf;font-weight:bold">004114</span><span style="color:#0000cf;font-weight:bold">9</span><span style="color:#000">B</span> <span style="color:#0000cf;font-weight:bold">5</span><span style="color:#000">B</span>               <span style="color:#000">pop</span>         <span style="color:#000">ebx</span>  
+<span style="color:#0000cf;font-weight:bold">004114</span><span style="color:#0000cf;font-weight:bold">9</span><span style="color:#000">C</span> <span style="color:#0000cf;font-weight:bold">81</span> <span style="color:#000">C4</span> <span style="color:#000">C0</span> <span style="color:#0000cf;font-weight:bold">00</span> <span style="color:#0000cf;font-weight:bold">00</span> <span style="color:#0000cf;font-weight:bold">00</span> <span style="color:#000">add</span>         <span style="color:#000">esp</span><span style="color:#000;font-weight:bold">,</span><span style="color:#0000cf;font-weight:bold">0</span><span style="color:#000">C0h</span> 
+<span style="color:#0000cf;font-weight:bold">004114</span><span style="color:#000">A2</span> <span style="color:#0000cf;font-weight:bold">3</span><span style="color:#000">B</span> <span style="color:#000">EC</span>            <span style="color:#000">cmp</span>         <span style="color:#000">ebp</span><span style="color:#000;font-weight:bold">,</span><span style="color:#000">esp</span> 
+<span style="color:#0000cf;font-weight:bold">004114</span><span style="color:#000">A4</span> <span style="color:#000">E8</span> <span style="color:#000">B5</span> <span style="color:#000">FC</span> <span style="color:#000">FF</span> <span style="color:#000">FF</span>   <span style="color:#000">call</span>        <span style="color:#a40000">@</span><span style="color:#000">ILT</span><span style="color:#ce5c00;font-weight:bold">+</span><span style="color:#0000cf;font-weight:bold">345</span><span style="color:#000;font-weight:bold">(</span><span style="color:#000">__RTC_CheckEsp</span><span style="color:#000;font-weight:bold">)</span> <span style="color:#000;font-weight:bold">(</span><span style="color:#0000cf;font-weight:bold">41115</span><span style="color:#000">Eh</span><span style="color:#000;font-weight:bold">)</span> 
+<span style="color:#0000cf;font-weight:bold">004114</span><span style="color:#000">A9</span> <span style="color:#0000cf;font-weight:bold">8</span><span style="color:#000">B</span> <span style="color:#000">E5</span>            <span style="color:#000">mov</span>         <span style="color:#000">esp</span><span style="color:#000;font-weight:bold">,</span><span style="color:#000">ebp</span> 
+<span style="color:#0000cf;font-weight:bold">004114</span><span style="color:#000">AB</span> <span style="color:#0000cf;font-weight:bold">5</span><span style="color:#000">D</span>               <span style="color:#000">pop</span>         <span style="color:#000">ebp</span>  
+<span style="color:#0000cf;font-weight:bold">004114</span><span style="color:#000">AC</span> <span style="color:#000">C2</span> <span style="color:#0000cf;font-weight:bold">04</span> <span style="color:#0000cf;font-weight:bold">00</span>         <span style="color:#000">ret</span>         <span style="color:#0000cf;font-weight:bold">4</span>   
+
+<span style="color:#8f5902;font-style:italic">//_cdecl
+</span><span style="color:#8f5902;font-style:italic"></span><span style="color:#204a87;font-weight:bold">void</span> <span style="color:#000">_cdecl</span> <span style="color:#000">ShowCde</span><span style="color:#000;font-weight:bold">(</span><span style="color:#204a87;font-weight:bold">int</span> <span style="color:#000">nNum</span><span style="color:#000;font-weight:bold">)</span>
+<span style="color:#0000cf;font-weight:bold">0041150</span><span style="color:#0000cf;font-weight:bold">9</span> <span style="color:#0000cf;font-weight:bold">8</span><span style="color:#000">B</span> <span style="color:#000">E5</span>            <span style="color:#000">mov</span>         <span style="color:#000">esp</span><span style="color:#000;font-weight:bold">,</span><span style="color:#000">ebp</span> 
+<span style="color:#0000cf;font-weight:bold">0041150</span><span style="color:#000">B</span> <span style="color:#0000cf;font-weight:bold">5</span><span style="color:#000">D</span>               <span style="color:#000">pop</span>         <span style="color:#000">ebp</span>  
+<span style="color:#0000cf;font-weight:bold">0041150</span><span style="color:#000">C</span> <span style="color:#000">C3</span>               <span style="color:#000">ret</span>     
+<span style="color:#8f5902;font-style:italic">//main
+</span><span style="color:#8f5902;font-style:italic"></span>	<span style="color:#000">ShowStd</span><span style="color:#000;font-weight:bold">(</span><span style="color:#a40000">&#39;</span><span style="color:#0000cf;font-weight:bold">123</span><span style="color:#a40000">&#39;</span><span style="color:#000;font-weight:bold">);</span>
+<span style="color:#0000cf;font-weight:bold">00413</span><span style="color:#0000cf;font-weight:bold">92</span><span style="color:#000">E</span> <span style="color:#0000cf;font-weight:bold">68</span> <span style="color:#0000cf;font-weight:bold">33</span> <span style="color:#0000cf;font-weight:bold">32</span> <span style="color:#0000cf;font-weight:bold">31</span> <span style="color:#0000cf;font-weight:bold">00</span>   <span style="color:#000">push</span>        <span style="color:#0000cf;font-weight:bold">313233</span><span style="color:#000">h</span> 
+<span style="color:#0000cf;font-weight:bold">00413</span><span style="color:#0000cf;font-weight:bold">933</span> <span style="color:#000">E8</span> <span style="color:#000">DC</span> <span style="color:#000">D6</span> <span style="color:#000">FF</span> <span style="color:#000">FF</span>   <span style="color:#000">call</span>        <span style="color:#000">ShowStd</span> <span style="color:#000;font-weight:bold">(</span><span style="color:#0000cf;font-weight:bold">411014</span><span style="color:#000">h</span><span style="color:#000;font-weight:bold">)</span> 
+	<span style="color:#000">ShowCde</span><span style="color:#000;font-weight:bold">(</span><span style="color:#a40000">&#39;</span><span style="color:#0000cf;font-weight:bold">234</span><span style="color:#a40000">&#39;</span><span style="color:#000;font-weight:bold">);</span>
+<span style="color:#0000cf;font-weight:bold">00413</span><span style="color:#0000cf;font-weight:bold">938</span> <span style="color:#0000cf;font-weight:bold">68</span> <span style="color:#0000cf;font-weight:bold">34</span> <span style="color:#0000cf;font-weight:bold">33</span> <span style="color:#0000cf;font-weight:bold">32</span> <span style="color:#0000cf;font-weight:bold">00</span>   <span style="color:#000">push</span>        <span style="color:#0000cf;font-weight:bold">323334</span><span style="color:#000">h</span> 
+<span style="color:#0000cf;font-weight:bold">00413</span><span style="color:#0000cf;font-weight:bold">93</span><span style="color:#000">D</span> <span style="color:#000">E8</span> <span style="color:#000">EB</span> <span style="color:#000">D6</span> <span style="color:#000">FF</span> <span style="color:#000">FF</span>   <span style="color:#000">call</span>        <span style="color:#000">ShowCde</span> <span style="color:#000;font-weight:bold">(</span><span style="color:#0000cf;font-weight:bold">41102</span><span style="color:#000">Dh</span><span style="color:#000;font-weight:bold">)</span> 
+<span style="color:#0000cf;font-weight:bold">00413</span><span style="color:#0000cf;font-weight:bold">942</span> <span style="color:#0000cf;font-weight:bold">83</span> <span style="color:#000">C4</span> <span style="color:#0000cf;font-weight:bold">04</span>         <span style="color:#000">add</span>         <span style="color:#000">esp</span><span style="color:#000;font-weight:bold">,</span><span style="color:#0000cf;font-weight:bold">4</span> 
+</code></pre></div><ul>
+<li><code>_cdecl</code>调用方式在函数内部是看不到任何平衡栈的方式操作,而在退出函数后对<code>esp</code>执行的+4的操作,实现栈平衡。</li>
+<li><code>_stdcall</code>调用约定只是在<code>ret</code>处检查是否有平衡操作，其实这个也不一定，其他汇编指令只要可以抬高<code>esp</code>,类似<code>pop ecx</code>都是可以的.
+再者编译器往往会做这方面的优化，比如多次调用<code>_cdecl</code>的函数，编译器只在调用的函数里面做一次平衡栈的操作,在<code>debug</code>模式下开<code>O2</code>优化,就会采用这种<code>复写传播</code>的优化.</li>
+<li><code>_fastcall</code>只简单说明下，这个也不常用. <code>_fastcall</code>是这几种调用约定里面效率最高的,因为这货是用寄存器传参的.因为寄存器就那么几个,所以<code>_fastcall</code>调用约定只使用<code>ecx</code>和<code>edx</code>,分别传递参数1,2,其余参数转换为栈传参数.</li>
+</ul>
+<h3 id="0x03-局部变量">0x03 局部变量</h3>
+<ul>
+<li>由于<code>局部变量</code>是使用栈空间，因此函数的第一件事儿就是开辟函数的局部变量需要的栈空间.</li>
+<li>在函数结尾处执行释放栈空间的操作,所以一般情况<code>局部变量</code>生命周期就是函数的,准确的说是<code>{}</code>.</li>
+<li>一般编译器默认的栈空间大小<strong>1M</strong>(2^20 byte),少数有默认<strong>4M</strong>的. VS下可以通过<code>/STACK:reserve[,commit]</code>来调整,不过尽量不要这么干.</li>
+</ul>
+<p>在大多数情况下，使用<code>ebp</code>寻址只能在非<code>O2</code>选项中产生,这种做主要为啦调试和检查栈平衡.<br>
+首先来看下基本栈结构是个什么情况：
+<img src="https://hadesxjc.oss-cn-beijing.aliyuncs.com/img/20200425110116.png" alt="此处输入图片的描述">
+原来这结果是这样的啊,那是不是说我可以干一些坏事情.</p>
+<div class="highlight"><pre tabindex="0" style="background-color:#f8f8f8;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-cpp" data-lang="cpp"><span style="color:#204a87;font-weight:bold">void</span> <span style="color:#000">funcloop</span><span style="color:#000;font-weight:bold">()</span>
+<span style="color:#000;font-weight:bold">{</span>
+    <span style="color:#204a87;font-weight:bold">int</span> <span style="color:#000">i</span><span style="color:#000;font-weight:bold">;</span>
+    <span style="color:#204a87;font-weight:bold">char</span> <span style="color:#000">s</span><span style="color:#000;font-weight:bold">[</span><span style="color:#0000cf;font-weight:bold">4</span><span style="color:#000;font-weight:bold">];</span>
+    <span style="color:#204a87;font-weight:bold">for</span><span style="color:#000;font-weight:bold">(</span><span style="color:#000">i</span><span style="color:#ce5c00;font-weight:bold">=</span><span style="color:#0000cf;font-weight:bold">0</span><span style="color:#000;font-weight:bold">;</span><span style="color:#000">i</span><span style="color:#ce5c00;font-weight:bold">&lt;=</span><span style="color:#0000cf;font-weight:bold">4</span><span style="color:#000;font-weight:bold">;</span><span style="color:#000">i</span><span style="color:#ce5c00;font-weight:bold">++</span><span style="color:#000;font-weight:bold">)</span>
+        <span style="color:#000">a</span><span style="color:#000;font-weight:bold">[</span><span style="color:#000">i</span><span style="color:#000;font-weight:bold">]</span><span style="color:#ce5c00;font-weight:bold">=</span><span style="color:#0000cf;font-weight:bold">0</span><span style="color:#000;font-weight:bold">;</span>
+<span style="color:#000;font-weight:bold">}</span>
+<span style="color:#8f5902;font-style:italic">//相对高级点的
+</span><span style="color:#8f5902;font-style:italic"></span><span style="color:#204a87;font-weight:bold">void</span>  <span style="color:#000">funcloop1</span><span style="color:#000;font-weight:bold">()</span>
+<span style="color:#000;font-weight:bold">{</span>
+	<span style="color:#204a87;font-weight:bold">int</span> <span style="color:#000">array</span><span style="color:#000;font-weight:bold">[</span><span style="color:#0000cf;font-weight:bold">4</span><span style="color:#000;font-weight:bold">];</span>
+	<span style="color:#204a87;font-weight:bold">int</span> <span style="color:#000">i</span><span style="color:#000;font-weight:bold">;</span>
+	<span style="color:#204a87;font-weight:bold">for</span><span style="color:#000;font-weight:bold">(</span><span style="color:#000">i</span><span style="color:#ce5c00;font-weight:bold">=</span><span style="color:#0000cf;font-weight:bold">0</span><span style="color:#000;font-weight:bold">;</span><span style="color:#000">i</span><span style="color:#ce5c00;font-weight:bold">&lt;=</span><span style="color:#0000cf;font-weight:bold">4</span><span style="color:#000;font-weight:bold">;</span><span style="color:#000">i</span><span style="color:#ce5c00;font-weight:bold">++</span><span style="color:#000;font-weight:bold">)</span>
+		<span style="color:#000">array</span><span style="color:#000;font-weight:bold">[</span><span style="color:#000">i</span><span style="color:#000;font-weight:bold">]</span><span style="color:#ce5c00;font-weight:bold">-=</span><span style="color:#0000cf;font-weight:bold">4</span><span style="color:#000;font-weight:bold">;</span>
+<span style="color:#000;font-weight:bold">}</span>
+<span style="color:#8f5902;font-style:italic">// 模拟递归
+</span><span style="color:#8f5902;font-style:italic"></span><span style="color:#204a87;font-weight:bold">void</span> <span style="color:#000">foo</span><span style="color:#000;font-weight:bold">(</span><span style="color:#204a87;font-weight:bold">int</span> <span style="color:#000">i</span><span style="color:#000;font-weight:bold">,</span> <span style="color:#204a87;font-weight:bold">int</span> <span style="color:#000">n</span><span style="color:#000;font-weight:bold">)</span>
+<span style="color:#000;font-weight:bold">{</span>
+  <span style="color:#000">printf</span><span style="color:#000;font-weight:bold">(</span><span style="color:#4e9a06">&#34;%d</span><span style="color:#4e9a06">\n</span><span style="color:#4e9a06">&#34;</span><span style="color:#000;font-weight:bold">,</span> <span style="color:#000">i</span><span style="color:#ce5c00;font-weight:bold">++</span><span style="color:#000;font-weight:bold">);</span>
+  <span style="color:#204a87;font-weight:bold">if</span><span style="color:#000;font-weight:bold">(</span><span style="color:#000">i</span><span style="color:#ce5c00;font-weight:bold">&lt;=</span><span style="color:#000">n</span><span style="color:#000;font-weight:bold">)</span> <span style="color:#ce5c00;font-weight:bold">*</span><span style="color:#000;font-weight:bold">(</span><span style="color:#204a87;font-weight:bold">unsigned</span> <span style="color:#204a87;font-weight:bold">long</span><span style="color:#ce5c00;font-weight:bold">*</span><span style="color:#000;font-weight:bold">)(</span><span style="color:#ce5c00;font-weight:bold">&amp;</span><span style="color:#000">i</span><span style="color:#ce5c00;font-weight:bold">-</span><span style="color:#0000cf;font-weight:bold">1</span><span style="color:#000;font-weight:bold">)</span> <span style="color:#ce5c00;font-weight:bold">-=</span> <span style="color:#0000cf;font-weight:bold">5</span><span style="color:#000;font-weight:bold">;</span>
+<span style="color:#000;font-weight:bold">}</span>
+</code></pre></div><p>yeah,准确说这样的代码在某些编译器确实会出现死循环的情况,比如vc6.0, 一些版本的gcc. 但是实际情况, 编译器开发上为了防止这种栈溢出造成可怕的后果，做啦很多防止手段。
+比如下图的vs做法:</p>
+<p><img src="https://hadesxjc.oss-cn-beijing.aliyuncs.com/img/cc337897.fig01.gif" alt="此处输入图片的描述"><br>
+基于堆栈的缓冲区溢出检测(<code>/GS</code>)是<code>Visual C++</code>中提供的最陈旧最常见的防御措施.<br>
+<code>/GS</code> 编译器标志的目标非常简单：减少恶意代码正确执行的机会.默认情况下, <code>/GS</code> 选项在 <code>Visual C++ 2003</code> 及更高版本中处于启用状态,它在运行时检测特定种类的堆栈溢出.为了进行检测, 它会在函数堆栈中包括一个随机数(在堆栈的返回地址之前),当函数返回时, 函数收尾代码将检查此值以确保它未进行过更改.如果它调用的 cookie 发生了变化,则执行过程将被中止.<br>
+用来设置 cookie 的函数导引代码如下所示:</p>
+<div class="highlight"><pre tabindex="0" style="background-color:#f8f8f8;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-cpp" data-lang="cpp"><span style="color:#000">sub</span>    <span style="color:#000">esp</span><span style="color:#000;font-weight:bold">,</span> <span style="color:#0000cf;font-weight:bold">8</span>
+<span style="color:#000">mov</span>    <span style="color:#000">eax</span><span style="color:#000;font-weight:bold">,</span> <span style="color:#000">DWORD</span> <span style="color:#000">PTR</span> <span style="color:#000">___security_cookie</span>
+<span style="color:#000">xor</span>    <span style="color:#000">eax</span><span style="color:#000;font-weight:bold">,</span> <span style="color:#000">esp</span>
+<span style="color:#000">mov</span>    <span style="color:#000">DWORD</span> <span style="color:#000">PTR</span> <span style="color:#000">__</span><span style="color:#a40000">$</span><span style="color:#000">ArrayPad</span><span style="color:#a40000">$</span><span style="color:#000;font-weight:bold">[</span><span style="color:#000">esp</span><span style="color:#ce5c00;font-weight:bold">+</span><span style="color:#0000cf;font-weight:bold">8</span><span style="color:#000;font-weight:bold">],</span> <span style="color:#000">eax</span>
+<span style="color:#000">mov</span>    <span style="color:#000">eax</span><span style="color:#000;font-weight:bold">,</span> <span style="color:#000">DWORD</span> <span style="color:#000">PTR</span> <span style="color:#000">_input</span><span style="color:#a40000">$</span><span style="color:#000;font-weight:bold">[</span><span style="color:#000">esp</span><span style="color:#ce5c00;font-weight:bold">+</span><span style="color:#0000cf;font-weight:bold">4</span><span style="color:#000;font-weight:bold">]</span> 
+</code></pre></div><p>此处显示的是用来检查 cookie 的函数收尾代码:</p>
+<div class="highlight"><pre tabindex="0" style="background-color:#f8f8f8;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-cpp" data-lang="cpp"><span style="color:#000">mov</span>    <span style="color:#000">ecx</span><span style="color:#000;font-weight:bold">,</span> <span style="color:#000">DWORD</span> <span style="color:#000">PTR</span> <span style="color:#000">__</span><span style="color:#a40000">$</span><span style="color:#000">ArrayPad</span><span style="color:#a40000">$</span><span style="color:#000;font-weight:bold">[</span><span style="color:#000">esp</span><span style="color:#ce5c00;font-weight:bold">+</span><span style="color:#0000cf;font-weight:bold">12</span><span style="color:#000;font-weight:bold">]</span>
+<span style="color:#000">add</span>    <span style="color:#000">esp</span><span style="color:#000;font-weight:bold">,</span> <span style="color:#0000cf;font-weight:bold">4</span>
+<span style="color:#000">xor</span>    <span style="color:#000">ecx</span><span style="color:#000;font-weight:bold">,</span> <span style="color:#000">esp</span>
+<span style="color:#000">call</span>    <span style="color:#a40000">@</span><span style="color:#000">__security_check_cookie</span><span style="color:#a40000">@</span><span style="color:#0000cf;font-weight:bold">4</span>
+<span style="color:#000">add</span>    <span style="color:#000">esp</span><span style="color:#000;font-weight:bold">,</span> <span style="color:#0000cf;font-weight:bold">8</span>
+</code></pre></div><p><code>Visual C++ 2005</code> 还会在堆栈上移动数据,使该数据更不容易被破坏.示例包括将缓冲区移动到高于非缓冲区的内存中.例如,此步骤有助于保护位于堆栈上的函数指针.此外，运行时将指针和缓冲区参数移至较低内存可减轻各种缓冲区溢出攻击。请参阅典型堆栈和 <code>/GS</code> 堆栈的比较图.
+/GS 编译器选项不能应用于下列任何情况：</p>
+<ul>
+<li>函数不包含缓冲区。</li>
+<li>优化未启用。</li>
+<li>函数被定义为具有变量参数列表。</li>
+<li>函数使用无保护的关键字标记 (C++)。</li>
+<li>函数在第一个语句中包含内嵌汇编代码。</li>
+<li>缓存区不是8字节类型且大小小于4个字节。</li>
+</ul>
+<p>在 <code>Visual C++ 2005 SP1</code> 中新增了一个选项, 可使 <code>/GS</code> 试探法更积极主动,从而可以保护更多的函数。<code>Microsoft</code> 添加此选项是因为在具有基于堆栈的缓冲区溢出代码中发布了少量的安全性快报并且代码（即使是使用 <code>/GS</code> 进行编译的）不受 cookie 的保护. 这一新增的选项大大增加了受保护的函数数量.
+要使用此选项，可将以下代码行放到需要添加保护的模块中，例如用来处理 Internet 数据的代码：</p>
+<blockquote>
+<p>#pragma strict_gs_check(on)</p>
+</blockquote>
+<p>有兴趣童鞋可以看看
+<a href="http://msdn.microsoft.com/zh-cn/magazine/cc337897.aspx" target="_blank" rel="noopener">微软的安全简报</a>,  
+<a href="http://blog.csdn.net/masefee/article/details/5630154" target="_blank" rel="noopener">StackCheck</a>.</p>
+<p>有些不安分的熊孩子的(我更喜欢一个用Geek这种称呼),编译器这种做法严重限制我们的自由,和我们的价值观严重违背.好吧, 到啦<strong>ShellCode</strong>登场的时候啦.</p>
+<div class="highlight"><pre tabindex="0" style="background-color:#f8f8f8;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-cpp" data-lang="cpp"><span style="color:#8f5902;font-style:italic">#include</span> <span style="color:#8f5902;font-style:italic">&lt;stdio.h&gt;</span><span style="color:#8f5902;font-style:italic">
+</span><span style="color:#8f5902;font-style:italic"></span><span style="color:#204a87;font-weight:bold">int</span> <span style="color:#000">main</span><span style="color:#000;font-weight:bold">()</span>
+<span style="color:#000;font-weight:bold">{</span>
+    <span style="color:#204a87;font-weight:bold">const</span> <span style="color:#204a87;font-weight:bold">short</span> <span style="color:#204a87;font-weight:bold">int</span> <span style="color:#000">c1</span> <span style="color:#ce5c00;font-weight:bold">=</span> <span style="color:#0000cf;font-weight:bold">49920</span><span style="color:#000;font-weight:bold">;</span>
+    <span style="color:#204a87;font-weight:bold">const</span> <span style="color:#204a87;font-weight:bold">int</span> <span style="color:#000">c2</span> <span style="color:#ce5c00;font-weight:bold">=</span> <span style="color:#0000cf;font-weight:bold">1073742008</span><span style="color:#000;font-weight:bold">;</span>
+    <span style="color:#204a87;font-weight:bold">int</span> <span style="color:#000;font-weight:bold">(</span><span style="color:#ce5c00;font-weight:bold">*</span><span style="color:#000">pf</span><span style="color:#000;font-weight:bold">)()</span> <span style="color:#ce5c00;font-weight:bold">=</span> <span style="color:#000;font-weight:bold">(</span><span style="color:#204a87;font-weight:bold">int</span> <span style="color:#000;font-weight:bold">(</span><span style="color:#ce5c00;font-weight:bold">*</span><span style="color:#000;font-weight:bold">)())</span><span style="color:#ce5c00;font-weight:bold">&amp;</span><span style="color:#000">c2</span><span style="color:#000;font-weight:bold">;</span>
+    <span style="color:#000">printf</span><span style="color:#000;font-weight:bold">(</span><span style="color:#4e9a06">&#34;%c%c</span><span style="color:#4e9a06">\n</span><span style="color:#4e9a06">&#34;</span><span style="color:#000;font-weight:bold">,</span> <span style="color:#ce5c00;font-weight:bold">*</span><span style="color:#000;font-weight:bold">(</span><span style="color:#204a87;font-weight:bold">char</span><span style="color:#ce5c00;font-weight:bold">*</span><span style="color:#000;font-weight:bold">)</span><span style="color:#000">pf</span><span style="color:#000;font-weight:bold">()</span><span style="color:#ce5c00;font-weight:bold">-</span><span style="color:#0000cf;font-weight:bold">19</span><span style="color:#000;font-weight:bold">,</span> <span style="color:#ce5c00;font-weight:bold">*</span><span style="color:#000;font-weight:bold">((</span><span style="color:#204a87;font-weight:bold">char</span><span style="color:#ce5c00;font-weight:bold">*</span><span style="color:#000;font-weight:bold">)</span><span style="color:#000">pf</span><span style="color:#000;font-weight:bold">()</span><span style="color:#ce5c00;font-weight:bold">+</span><span style="color:#0000cf;font-weight:bold">1</span><span style="color:#000;font-weight:bold">)</span><span style="color:#ce5c00;font-weight:bold">-</span><span style="color:#0000cf;font-weight:bold">49</span><span style="color:#000;font-weight:bold">);</span>
+    <span style="color:#204a87;font-weight:bold">return</span> <span style="color:#0000cf;font-weight:bold">0</span><span style="color:#000;font-weight:bold">;</span>
+<span style="color:#000;font-weight:bold">}</span>
+
+<span style="color:#8f5902;font-style:italic">//正统点的
+</span><span style="color:#8f5902;font-style:italic"></span><span style="color:#204a87;font-weight:bold">char</span> <span style="color:#000">shellcode</span><span style="color:#000;font-weight:bold">[]</span> <span style="color:#ce5c00;font-weight:bold">=</span> <span style="color:#4e9a06">&#34;</span><span style="color:#4e9a06">\xbb\x00\x00\x00\x00</span><span style="color:#4e9a06">&#34;</span>           
+                   <span style="color:#4e9a06">&#34;</span><span style="color:#4e9a06">\xb8\x01\x00\x00\x00</span><span style="color:#4e9a06">&#34;</span>                  
+                   <span style="color:#4e9a06">&#34;</span><span style="color:#4e9a06">\xcd\x80</span><span style="color:#4e9a06">&#34;</span><span style="color:#000;font-weight:bold">;</span>                  
+<span style="color:#204a87;font-weight:bold">int</span> <span style="color:#000">main</span><span style="color:#000;font-weight:bold">()</span>
+<span style="color:#000;font-weight:bold">{</span>
+    <span style="color:#204a87;font-weight:bold">int</span> <span style="color:#ce5c00;font-weight:bold">*</span><span style="color:#000">ret</span><span style="color:#000;font-weight:bold">;</span>
+    <span style="color:#000">ret</span> <span style="color:#ce5c00;font-weight:bold">=</span> <span style="color:#000;font-weight:bold">(</span><span style="color:#204a87;font-weight:bold">int</span> <span style="color:#ce5c00;font-weight:bold">*</span><span style="color:#000;font-weight:bold">)</span><span style="color:#ce5c00;font-weight:bold">&amp;</span><span style="color:#000">ret</span> <span style="color:#ce5c00;font-weight:bold">+</span> <span style="color:#0000cf;font-weight:bold">2</span><span style="color:#000;font-weight:bold">;</span>
+    <span style="color:#000;font-weight:bold">(</span><span style="color:#ce5c00;font-weight:bold">*</span><span style="color:#000">ret</span><span style="color:#000;font-weight:bold">)</span> <span style="color:#ce5c00;font-weight:bold">=</span> <span style="color:#000;font-weight:bold">(</span><span style="color:#204a87;font-weight:bold">int</span><span style="color:#000;font-weight:bold">)</span><span style="color:#000">shellcode</span><span style="color:#000;font-weight:bold">;</span>
+<span style="color:#000;font-weight:bold">}</span>
+
+<span style="color:#8f5902;font-style:italic">//shellcode的构造过程
+</span><span style="color:#8f5902;font-style:italic"></span><span style="color:#000">Win32</span> <span style="color:#000">Shell</span>  <span style="color:#000">C</span>
+<span style="color:#8f5902;font-style:italic">#include</span> <span style="color:#8f5902;font-style:italic">&lt;Windows.h&gt;</span><span style="color:#8f5902;font-style:italic">
+</span><span style="color:#8f5902;font-style:italic">#include</span> <span style="color:#8f5902;font-style:italic">&lt;WinBase.h&gt;</span><span style="color:#8f5902;font-style:italic">
+</span><span style="color:#8f5902;font-style:italic"></span>
+<span style="color:#204a87;font-weight:bold">typedef</span> <span style="color:#204a87;font-weight:bold">void</span> <span style="color:#000;font-weight:bold">(</span><span style="color:#ce5c00;font-weight:bold">*</span><span style="color:#000">MYPROC</span><span style="color:#000;font-weight:bold">)(</span><span style="color:#000">LPTSTR</span><span style="color:#000;font-weight:bold">);</span>
+<span style="color:#204a87;font-weight:bold">typedef</span> <span style="color:#000">void</span> <span style="color:#000;font-weight:bold">(</span><span style="color:#ce5c00;font-weight:bold">*</span><span style="color:#000">MYPROC2</span><span style="color:#000;font-weight:bold">)(</span><span style="color:#204a87;font-weight:bold">int</span><span style="color:#000;font-weight:bold">);</span>
+
+<span style="color:#204a87;font-weight:bold">int</span> <span style="color:#000">main</span><span style="color:#000;font-weight:bold">()</span>
+<span style="color:#000;font-weight:bold">{</span>
+	<span style="color:#000">HINSTANCE</span> <span style="color:#000">hLib</span><span style="color:#000;font-weight:bold">;</span>
+	<span style="color:#000">MYPROC</span>	<span style="color:#000">pProcAdd</span><span style="color:#000;font-weight:bold">;</span>
+	<span style="color:#000">MYPROC2</span>	<span style="color:#000">pProcAdd2</span><span style="color:#000;font-weight:bold">;</span>
+
+	<span style="color:#204a87;font-weight:bold">char</span> <span style="color:#000">dllbuf</span><span style="color:#000;font-weight:bold">[]</span> <span style="color:#ce5c00;font-weight:bold">=</span><span style="color:#4e9a06">&#34;msvcrt.dll&#34;</span><span style="color:#000;font-weight:bold">;</span>
+	<span style="color:#204a87;font-weight:bold">char</span> <span style="color:#000">sysbuf</span><span style="color:#000;font-weight:bold">[]</span> <span style="color:#ce5c00;font-weight:bold">=</span> <span style="color:#4e9a06">&#34;system&#34;</span><span style="color:#000;font-weight:bold">;</span>
+	<span style="color:#204a87;font-weight:bold">char</span> <span style="color:#000">cmdbuf</span><span style="color:#000;font-weight:bold">[]</span> <span style="color:#ce5c00;font-weight:bold">=</span> <span style="color:#4e9a06">&#34;command.com&#34;</span><span style="color:#000;font-weight:bold">;</span>
+	<span style="color:#204a87;font-weight:bold">char</span> <span style="color:#000">sysbuf2</span><span style="color:#000;font-weight:bold">[]</span><span style="color:#ce5c00;font-weight:bold">=</span><span style="color:#4e9a06">&#34;exit&#34;</span><span style="color:#000;font-weight:bold">;</span>
+	<span style="color:#000">hLib</span> <span style="color:#ce5c00;font-weight:bold">=</span> <span style="color:#000">LoadLibrary</span><span style="color:#000;font-weight:bold">(</span><span style="color:#000">dllbuf</span><span style="color:#000;font-weight:bold">);</span>
+	<span style="color:#000">printf</span><span style="color:#000;font-weight:bold">(</span><span style="color:#4e9a06">&#34;0x%x</span><span style="color:#4e9a06">\n</span><span style="color:#4e9a06">&#34;</span><span style="color:#000;font-weight:bold">,</span><span style="color:#000">hLib</span><span style="color:#000;font-weight:bold">);</span>
+	<span style="color:#000">pProcAdd</span> <span style="color:#ce5c00;font-weight:bold">=</span> <span style="color:#000;font-weight:bold">(</span><span style="color:#000">MYPROC</span><span style="color:#000;font-weight:bold">)</span><span style="color:#000">GetProcAddress</span><span style="color:#000;font-weight:bold">(</span><span style="color:#000">hLib</span><span style="color:#000;font-weight:bold">,</span> <span style="color:#000">sysbuf</span><span style="color:#000;font-weight:bold">);</span>
+	<span style="color:#000;font-weight:bold">(</span><span style="color:#000">pProcAdd</span><span style="color:#000;font-weight:bold">)(</span><span style="color:#000">cmdbuf</span><span style="color:#000;font-weight:bold">);</span>
+	<span style="color:#000">pProcAdd2</span> <span style="color:#ce5c00;font-weight:bold">=</span> <span style="color:#000;font-weight:bold">(</span><span style="color:#000">MYPROC2</span><span style="color:#000;font-weight:bold">)</span><span style="color:#000">GetProcAddress</span><span style="color:#000;font-weight:bold">(</span><span style="color:#000">hLib</span><span style="color:#000;font-weight:bold">,</span> <span style="color:#000">sysbuf2</span><span style="color:#000;font-weight:bold">);</span>
+
+	<span style="color:#000;font-weight:bold">(</span><span style="color:#000">pProcAdd2</span><span style="color:#000;font-weight:bold">)(</span><span style="color:#0000cf;font-weight:bold">0</span><span style="color:#000;font-weight:bold">);</span>
+	<span style="color:#204a87;font-weight:bold">return</span> <span style="color:#0000cf;font-weight:bold">0</span><span style="color:#000;font-weight:bold">;</span>
+<span style="color:#000;font-weight:bold">}</span>
+<span style="color:#8f5902;font-style:italic">// 内联汇编版本， 如果你是64位不好意思，那个不支持内联汇编
+</span><span style="color:#8f5902;font-style:italic"></span><span style="color:#204a87;font-weight:bold">void</span> <span style="color:#000">main</span><span style="color:#000;font-weight:bold">()</span>
+<span style="color:#000;font-weight:bold">{</span>
+	<span style="color:#000">LoadLibrary</span><span style="color:#000;font-weight:bold">(</span><span style="color:#4e9a06">&#34;msvcrt.dll&#34;</span><span style="color:#000;font-weight:bold">);</span>
+	<span style="color:#204a87;font-weight:bold">__asm</span><span style="color:#000;font-weight:bold">{</span>
+		<span style="color:#000">mov</span> <span style="color:#000">esp</span><span style="color:#000;font-weight:bold">,</span> <span style="color:#000">ebp</span>
+		<span style="color:#000">push</span> <span style="color:#000">ebp</span>
+		<span style="color:#000">mov</span> <span style="color:#000">ebp</span><span style="color:#000;font-weight:bold">,</span> <span style="color:#000">esp</span>
+		<span style="color:#000">xor</span> <span style="color:#000">edi</span><span style="color:#000;font-weight:bold">,</span> <span style="color:#000">edi</span>
+		<span style="color:#000">push</span> <span style="color:#000">edi</span>
+		<span style="color:#000">sub</span> <span style="color:#000">esp</span><span style="color:#000;font-weight:bold">,</span> <span style="color:#0000cf;font-weight:bold">08</span><span style="color:#000">h</span>
+
+		<span style="color:#000">mov</span> <span style="color:#000">byte</span> <span style="color:#000">ptr</span> <span style="color:#000;font-weight:bold">[</span><span style="color:#000">ebp</span><span style="color:#ce5c00;font-weight:bold">-</span><span style="color:#0000cf;font-weight:bold">0</span><span style="color:#000">ch</span><span style="color:#000;font-weight:bold">],</span> <span style="color:#0000cf;font-weight:bold">63</span><span style="color:#000">h</span>
+		<span style="color:#000">mov</span> <span style="color:#000">byte</span> <span style="color:#000">ptr</span> <span style="color:#000;font-weight:bold">[</span><span style="color:#000">ebp</span><span style="color:#ce5c00;font-weight:bold">-</span><span style="color:#0000cf;font-weight:bold">0</span><span style="color:#000">bh</span><span style="color:#000;font-weight:bold">],</span> <span style="color:#0000cf;font-weight:bold">6f</span><span style="color:#000">h</span>
+		<span style="color:#000">mov</span> <span style="color:#000">byte</span> <span style="color:#000">ptr</span> <span style="color:#000;font-weight:bold">[</span><span style="color:#000">ebp</span><span style="color:#ce5c00;font-weight:bold">-</span><span style="color:#0000cf;font-weight:bold">0</span><span style="color:#000">ah</span><span style="color:#000;font-weight:bold">],</span> <span style="color:#0000cf;font-weight:bold">6</span><span style="color:#000">dh</span>
+		<span style="color:#000">mov</span> <span style="color:#000">byte</span> <span style="color:#000">ptr</span> <span style="color:#000;font-weight:bold">[</span><span style="color:#000">ebp</span><span style="color:#ce5c00;font-weight:bold">-</span><span style="color:#0000cf;font-weight:bold">09</span><span style="color:#000">h</span><span style="color:#000;font-weight:bold">],</span> <span style="color:#0000cf;font-weight:bold">6</span><span style="color:#000">dh</span>
+		<span style="color:#000">mov</span> <span style="color:#000">byte</span> <span style="color:#000">ptr</span> <span style="color:#000;font-weight:bold">[</span><span style="color:#000">ebp</span><span style="color:#ce5c00;font-weight:bold">-</span><span style="color:#0000cf;font-weight:bold">08</span><span style="color:#000">h</span><span style="color:#000;font-weight:bold">],</span> <span style="color:#0000cf;font-weight:bold">61</span><span style="color:#000">h</span>
+		<span style="color:#000">mov</span> <span style="color:#000">byte</span> <span style="color:#000">ptr</span> <span style="color:#000;font-weight:bold">[</span><span style="color:#000">ebp</span><span style="color:#ce5c00;font-weight:bold">-</span><span style="color:#0000cf;font-weight:bold">07</span><span style="color:#000">h</span><span style="color:#000;font-weight:bold">],</span> <span style="color:#0000cf;font-weight:bold">6</span><span style="color:#000">eh</span>
+		<span style="color:#000">mov</span> <span style="color:#000">byte</span> <span style="color:#000">ptr</span> <span style="color:#000;font-weight:bold">[</span><span style="color:#000">ebp</span><span style="color:#ce5c00;font-weight:bold">-</span><span style="color:#0000cf;font-weight:bold">06</span><span style="color:#000">h</span><span style="color:#000;font-weight:bold">],</span> <span style="color:#0000cf;font-weight:bold">64</span><span style="color:#000">h</span>
+		<span style="color:#000">mov</span> <span style="color:#000">byte</span> <span style="color:#000">ptr</span> <span style="color:#000;font-weight:bold">[</span><span style="color:#000">ebp</span><span style="color:#ce5c00;font-weight:bold">-</span><span style="color:#0000cf;font-weight:bold">05</span><span style="color:#000">h</span><span style="color:#000;font-weight:bold">],</span> <span style="color:#0000cf;font-weight:bold">2</span><span style="color:#000">eh</span>
+		<span style="color:#000">mov</span> <span style="color:#000">byte</span> <span style="color:#000">ptr</span> <span style="color:#000;font-weight:bold">[</span><span style="color:#000">ebp</span><span style="color:#ce5c00;font-weight:bold">-</span><span style="color:#0000cf;font-weight:bold">04</span><span style="color:#000">h</span><span style="color:#000;font-weight:bold">],</span> <span style="color:#0000cf;font-weight:bold">63</span><span style="color:#000">h</span>
+		<span style="color:#000">mov</span> <span style="color:#000">byte</span> <span style="color:#000">ptr</span> <span style="color:#000;font-weight:bold">[</span><span style="color:#000">ebp</span><span style="color:#ce5c00;font-weight:bold">-</span><span style="color:#0000cf;font-weight:bold">03</span><span style="color:#000">h</span><span style="color:#000;font-weight:bold">],</span> <span style="color:#0000cf;font-weight:bold">6f</span><span style="color:#000">h</span>
+		<span style="color:#000">mov</span> <span style="color:#000">byte</span> <span style="color:#000">ptr</span> <span style="color:#000;font-weight:bold">[</span><span style="color:#000">ebp</span><span style="color:#ce5c00;font-weight:bold">-</span><span style="color:#0000cf;font-weight:bold">02</span><span style="color:#000">h</span><span style="color:#000;font-weight:bold">],</span> <span style="color:#0000cf;font-weight:bold">6</span><span style="color:#000">dh</span>
+
+		<span style="color:#000">lea</span> <span style="color:#000">eax</span><span style="color:#000;font-weight:bold">,</span> <span style="color:#000;font-weight:bold">[</span><span style="color:#000">ebp</span><span style="color:#ce5c00;font-weight:bold">-</span><span style="color:#0000cf;font-weight:bold">0</span><span style="color:#000">ch</span><span style="color:#000;font-weight:bold">]</span>
+		<span style="color:#000">push</span> <span style="color:#000">eax</span>
+		<span style="color:#000">mov</span> <span style="color:#000">eax</span><span style="color:#000;font-weight:bold">,</span> <span style="color:#0000cf;font-weight:bold">0x751bb177</span>
+		<span style="color:#000">call</span> <span style="color:#000">eax</span>
+	<span style="color:#000;font-weight:bold">}</span>
+<span style="color:#000;font-weight:bold">}</span>
+<span style="color:#8f5902;font-style:italic">// ShellCode版本
+</span><span style="color:#8f5902;font-style:italic"></span>
+<span style="color:#204a87;font-weight:bold">char</span> <span style="color:#000">shellcode</span><span style="color:#000;font-weight:bold">[]</span><span style="color:#ce5c00;font-weight:bold">=</span>
+<span style="color:#000;font-weight:bold">{</span>
+<span style="color:#0000cf;font-weight:bold">0x8B</span><span style="color:#000;font-weight:bold">,</span><span style="color:#0000cf;font-weight:bold">0xE5</span><span style="color:#000;font-weight:bold">,</span><span style="color:#8f5902;font-style:italic">//mov esp, ebp
+</span><span style="color:#8f5902;font-style:italic"></span><span style="color:#0000cf;font-weight:bold">0x55</span><span style="color:#000;font-weight:bold">,</span><span style="color:#8f5902;font-style:italic">//push ebp
+</span><span style="color:#8f5902;font-style:italic"></span><span style="color:#0000cf;font-weight:bold">0x8B</span><span style="color:#000;font-weight:bold">,</span> <span style="color:#0000cf;font-weight:bold">0xEC</span><span style="color:#000;font-weight:bold">,</span><span style="color:#8f5902;font-style:italic">//mov ebp, esp
+</span><span style="color:#8f5902;font-style:italic"></span><span style="color:#0000cf;font-weight:bold">0x33</span><span style="color:#000;font-weight:bold">,</span><span style="color:#0000cf;font-weight:bold">0xFF</span><span style="color:#000;font-weight:bold">,</span><span style="color:#8f5902;font-style:italic">//xor edi, edi
+</span><span style="color:#8f5902;font-style:italic"></span><span style="color:#0000cf;font-weight:bold">0x57</span><span style="color:#000;font-weight:bold">,</span><span style="color:#8f5902;font-style:italic">//push edi
+</span><span style="color:#8f5902;font-style:italic"></span><span style="color:#0000cf;font-weight:bold">0x83</span><span style="color:#000;font-weight:bold">,</span> <span style="color:#0000cf;font-weight:bold">0xEC</span><span style="color:#000;font-weight:bold">,</span> <span style="color:#0000cf;font-weight:bold">0x08</span><span style="color:#000;font-weight:bold">,</span><span style="color:#8f5902;font-style:italic">//sub esp, 08h
+</span><span style="color:#8f5902;font-style:italic"></span>
+<span style="color:#0000cf;font-weight:bold">0xC6</span><span style="color:#000;font-weight:bold">,</span> <span style="color:#0000cf;font-weight:bold">0x45</span><span style="color:#000;font-weight:bold">,</span> <span style="color:#0000cf;font-weight:bold">0xF4</span><span style="color:#000;font-weight:bold">,</span> <span style="color:#0000cf;font-weight:bold">0x63</span><span style="color:#000;font-weight:bold">,</span><span style="color:#8f5902;font-style:italic">//mov byte ptr [ebp-0ch], 63h
+</span><span style="color:#8f5902;font-style:italic"></span><span style="color:#0000cf;font-weight:bold">0xC6</span><span style="color:#000;font-weight:bold">,</span> <span style="color:#0000cf;font-weight:bold">0x45</span><span style="color:#000;font-weight:bold">,</span> <span style="color:#0000cf;font-weight:bold">0xF5</span><span style="color:#000;font-weight:bold">,</span> <span style="color:#0000cf;font-weight:bold">0x6F</span><span style="color:#000;font-weight:bold">,</span><span style="color:#8f5902;font-style:italic">///mov byte ptr [ebp-0bh], 6fh
+</span><span style="color:#8f5902;font-style:italic"></span><span style="color:#0000cf;font-weight:bold">0xC6</span><span style="color:#000;font-weight:bold">,</span> <span style="color:#0000cf;font-weight:bold">0x45</span><span style="color:#000;font-weight:bold">,</span> <span style="color:#0000cf;font-weight:bold">0xF6</span><span style="color:#000;font-weight:bold">,</span> <span style="color:#0000cf;font-weight:bold">0x6D</span><span style="color:#000;font-weight:bold">,</span><span style="color:#8f5902;font-style:italic">///mov byte ptr [ebp-0ah], 6dh
+</span><span style="color:#8f5902;font-style:italic"></span><span style="color:#0000cf;font-weight:bold">0xC6</span><span style="color:#000;font-weight:bold">,</span> <span style="color:#0000cf;font-weight:bold">0x45</span><span style="color:#000;font-weight:bold">,</span> <span style="color:#0000cf;font-weight:bold">0xF7</span><span style="color:#000;font-weight:bold">,</span> <span style="color:#0000cf;font-weight:bold">0x6D</span><span style="color:#000;font-weight:bold">,</span><span style="color:#8f5902;font-style:italic">//mov byte ptr [ebp-09h], 6dh
+</span><span style="color:#8f5902;font-style:italic"></span><span style="color:#0000cf;font-weight:bold">0xC6</span><span style="color:#000;font-weight:bold">,</span> <span style="color:#0000cf;font-weight:bold">0x45</span><span style="color:#000;font-weight:bold">,</span> <span style="color:#0000cf;font-weight:bold">0xF8</span><span style="color:#000;font-weight:bold">,</span> <span style="color:#0000cf;font-weight:bold">0x61</span><span style="color:#000;font-weight:bold">,</span><span style="color:#8f5902;font-style:italic">//mov byte ptr [ebp-08h], 61h
+</span><span style="color:#8f5902;font-style:italic"></span><span style="color:#0000cf;font-weight:bold">0xC6</span><span style="color:#000;font-weight:bold">,</span> <span style="color:#0000cf;font-weight:bold">0x45</span><span style="color:#000;font-weight:bold">,</span> <span style="color:#0000cf;font-weight:bold">0xF9</span><span style="color:#000;font-weight:bold">,</span> <span style="color:#0000cf;font-weight:bold">0x6E</span><span style="color:#000;font-weight:bold">,</span><span style="color:#8f5902;font-style:italic">//mov byte ptr [ebp-07h], 6eh
+</span><span style="color:#8f5902;font-style:italic"></span><span style="color:#0000cf;font-weight:bold">0xC6</span><span style="color:#000;font-weight:bold">,</span> <span style="color:#0000cf;font-weight:bold">0x45</span><span style="color:#000;font-weight:bold">,</span> <span style="color:#0000cf;font-weight:bold">0xFA</span><span style="color:#000;font-weight:bold">,</span> <span style="color:#0000cf;font-weight:bold">0x64</span><span style="color:#000;font-weight:bold">,</span><span style="color:#8f5902;font-style:italic">//mov byte ptr [ebp-06h], 64h
+</span><span style="color:#8f5902;font-style:italic"></span><span style="color:#0000cf;font-weight:bold">0xC6</span><span style="color:#000;font-weight:bold">,</span> <span style="color:#0000cf;font-weight:bold">0x45</span><span style="color:#000;font-weight:bold">,</span> <span style="color:#0000cf;font-weight:bold">0xFB</span><span style="color:#000;font-weight:bold">,</span> <span style="color:#0000cf;font-weight:bold">0x2E</span><span style="color:#000;font-weight:bold">,</span><span style="color:#8f5902;font-style:italic">//mov byte ptr [ebp-05h], 2eh
+</span><span style="color:#8f5902;font-style:italic"></span><span style="color:#0000cf;font-weight:bold">0xC6</span><span style="color:#000;font-weight:bold">,</span> <span style="color:#0000cf;font-weight:bold">0x45</span><span style="color:#000;font-weight:bold">,</span> <span style="color:#0000cf;font-weight:bold">0xFC</span><span style="color:#000;font-weight:bold">,</span> <span style="color:#0000cf;font-weight:bold">0x63</span><span style="color:#000;font-weight:bold">,</span><span style="color:#8f5902;font-style:italic">//mov byte ptr [ebp-04h], 63h
+</span><span style="color:#8f5902;font-style:italic"></span><span style="color:#0000cf;font-weight:bold">0xC6</span><span style="color:#000;font-weight:bold">,</span> <span style="color:#0000cf;font-weight:bold">0x45</span><span style="color:#000;font-weight:bold">,</span> <span style="color:#0000cf;font-weight:bold">0xFD</span><span style="color:#000;font-weight:bold">,</span> <span style="color:#0000cf;font-weight:bold">0x6F</span><span style="color:#000;font-weight:bold">,</span><span style="color:#8f5902;font-style:italic">//mov byte ptr [ebp-03h], 6fh
+</span><span style="color:#8f5902;font-style:italic"></span><span style="color:#0000cf;font-weight:bold">0xC6</span><span style="color:#000;font-weight:bold">,</span> <span style="color:#0000cf;font-weight:bold">0x45</span><span style="color:#000;font-weight:bold">,</span> <span style="color:#0000cf;font-weight:bold">0xFE</span><span style="color:#000;font-weight:bold">,</span> <span style="color:#0000cf;font-weight:bold">0x6D</span><span style="color:#000;font-weight:bold">,</span><span style="color:#8f5902;font-style:italic">//mov byte ptr [ebp-02h], 6dh
+</span><span style="color:#8f5902;font-style:italic"></span><span style="color:#0000cf;font-weight:bold">0x8D</span><span style="color:#000;font-weight:bold">,</span> <span style="color:#0000cf;font-weight:bold">0x45</span><span style="color:#000;font-weight:bold">,</span> <span style="color:#0000cf;font-weight:bold">0xF4</span><span style="color:#000;font-weight:bold">,</span><span style="color:#8f5902;font-style:italic">//lea eax, [ebp-0ch]
+</span><span style="color:#8f5902;font-style:italic"></span><span style="color:#0000cf;font-weight:bold">0x50</span><span style="color:#000;font-weight:bold">,</span><span style="color:#8f5902;font-style:italic">//push eax
+</span><span style="color:#8f5902;font-style:italic"></span><span style="color:#0000cf;font-weight:bold">0xB8</span><span style="color:#000;font-weight:bold">,</span><span style="color:#0000cf;font-weight:bold">0x77</span><span style="color:#000;font-weight:bold">,</span><span style="color:#0000cf;font-weight:bold">0xB1</span><span style="color:#000;font-weight:bold">,</span><span style="color:#0000cf;font-weight:bold">0x1B</span><span style="color:#000;font-weight:bold">,</span><span style="color:#0000cf;font-weight:bold">0x75</span><span style="color:#000;font-weight:bold">,</span><span style="color:#8f5902;font-style:italic">//mov eax, 0x751bb177
+</span><span style="color:#8f5902;font-style:italic"></span><span style="color:#0000cf;font-weight:bold">0xFF</span><span style="color:#000;font-weight:bold">,</span><span style="color:#0000cf;font-weight:bold">0xD0</span><span style="color:#8f5902;font-style:italic">//call eax
+</span><span style="color:#8f5902;font-style:italic"></span><span style="color:#000;font-weight:bold">};</span>
+
+<span style="color:#204a87;font-weight:bold">int</span> <span style="color:#000">main</span><span style="color:#000;font-weight:bold">()</span>
+<span style="color:#000;font-weight:bold">{</span>
+	<span style="color:#204a87;font-weight:bold">int</span> <span style="color:#ce5c00;font-weight:bold">*</span><span style="color:#000">ret</span><span style="color:#000;font-weight:bold">;</span>
+	<span style="color:#000">LoadLibrary</span><span style="color:#000;font-weight:bold">(</span><span style="color:#4e9a06">&#34;msvcrt.dll&#34;</span><span style="color:#000;font-weight:bold">);</span>
+	<span style="color:#8f5902;font-style:italic">// 这是vs2005下的  vc6.0 + 2
+</span><span style="color:#8f5902;font-style:italic"></span>	<span style="color:#000">ret</span> <span style="color:#ce5c00;font-weight:bold">=</span> <span style="color:#000;font-weight:bold">(</span><span style="color:#204a87;font-weight:bold">int</span><span style="color:#ce5c00;font-weight:bold">*</span><span style="color:#000;font-weight:bold">)</span><span style="color:#ce5c00;font-weight:bold">&amp;</span><span style="color:#000">ret</span> <span style="color:#ce5c00;font-weight:bold">+</span> <span style="color:#0000cf;font-weight:bold">3</span><span style="color:#000;font-weight:bold">;</span>
+	<span style="color:#000;font-weight:bold">(</span><span style="color:#ce5c00;font-weight:bold">*</span><span style="color:#000">ret</span><span style="color:#000;font-weight:bold">)</span> <span style="color:#ce5c00;font-weight:bold">=</span> <span style="color:#000;font-weight:bold">(</span><span style="color:#204a87;font-weight:bold">int</span><span style="color:#000;font-weight:bold">)</span><span style="color:#000">shellcode</span><span style="color:#000;font-weight:bold">;</span>
+	<span style="color:#000">getchar</span><span style="color:#000;font-weight:bold">();</span>
+	<span style="color:#204a87;font-weight:bold">return</span> <span style="color:#0000cf;font-weight:bold">0</span><span style="color:#000;font-weight:bold">;</span>
+<span style="color:#000;font-weight:bold">}</span>
+<span style="color:#8f5902;font-style:italic">//上面3步表达一步一步的构造ShellCode过程
+</span><span style="color:#8f5902;font-style:italic">//这里并没有讲定位api地址的做法
+</span></code></pre></div><p>首先声明这种代码不属于正常编程范畴,不然你老板一定会打死你,真的会打死你的.<code>ShellCode</code>不具备跨平台性,通常写这种代码都是<code>cracker</code>,这块就不多说,不然有阿姨会说我带坏小孩子的.</p>
+<h3 id="0x04-函数参数">0x04 函数参数</h3>
+<p>前面说调用约定时候,说啦点传参方式,这节正式开始<code>crack</code>.<br>
+<code>函数参数</code>通过栈结构进行传递,在<code>c/c++</code>代码中,其传参数从右边向做入栈,最先定义的参数最后入栈.<br>
+<code>函数参数</code>是通过栈传递的,使用<code>push</code>指令讲数据压入栈中,而<code>push</code>指令讲操作数复制到栈顶,所以这时候压入栈的数据和原数据是在两个不同的地址,是独立存在的,因为对函数参数的修改,  实际上是对当前栈内的参数中保存的值的修改,与原数据没有任何关系.正因为如此,<code>c/c++</code>中，<code>形参</code>是<code>实参</code>的副本，对<code>形参</code>的修改不影响其<code>实参</code>.</p>
+<div class="highlight"><pre tabindex="0" style="background-color:#f8f8f8;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-cpp" data-lang="cpp"><span style="color:#8f5902;font-style:italic">//好吧，落点俗套，贴点面试题。
+</span><span style="color:#8f5902;font-style:italic"></span><span style="color:#204a87;font-weight:bold">void</span> <span style="color:#000">GetMemory</span><span style="color:#000;font-weight:bold">(</span><span style="color:#204a87;font-weight:bold">char</span> <span style="color:#ce5c00;font-weight:bold">*</span><span style="color:#000">p</span><span style="color:#000;font-weight:bold">)</span>
+<span style="color:#000;font-weight:bold">{</span>
+	<span style="color:#000">p</span> <span style="color:#ce5c00;font-weight:bold">=</span> <span style="color:#000;font-weight:bold">(</span><span style="color:#204a87;font-weight:bold">char</span><span style="color:#ce5c00;font-weight:bold">*</span><span style="color:#000;font-weight:bold">)</span><span style="color:#000">malloc</span><span style="color:#000;font-weight:bold">(</span><span style="color:#0000cf;font-weight:bold">100</span><span style="color:#000;font-weight:bold">);</span>
+<span style="color:#000;font-weight:bold">}</span>
+<span style="color:#204a87;font-weight:bold">void</span> <span style="color:#000">test</span><span style="color:#000;font-weight:bold">(</span><span style="color:#204a87;font-weight:bold">void</span><span style="color:#000;font-weight:bold">)</span>
+<span style="color:#000;font-weight:bold">{</span>
+	<span style="color:#204a87;font-weight:bold">char</span> <span style="color:#ce5c00;font-weight:bold">*</span><span style="color:#000">str</span> <span style="color:#ce5c00;font-weight:bold">=</span> <span style="color:#204a87">NULL</span><span style="color:#000;font-weight:bold">;</span>
+	<span style="color:#000">GetMemory</span><span style="color:#000;font-weight:bold">(</span><span style="color:#000">str</span><span style="color:#000;font-weight:bold">);</span>
+	<span style="color:#000">strcpy</span><span style="color:#000;font-weight:bold">(</span><span style="color:#000">str</span><span style="color:#000;font-weight:bold">,</span> <span style="color:#4e9a06">&#34;hello&#34;</span><span style="color:#000;font-weight:bold">);</span>
+	<span style="color:#000">free</span><span style="color:#000;font-weight:bold">(</span><span style="color:#000">str</span><span style="color:#000;font-weight:bold">);</span>
+	<span style="color:#204a87;font-weight:bold">if</span> <span style="color:#000;font-weight:bold">(</span><span style="color:#000">str</span> <span style="color:#ce5c00;font-weight:bold">!=</span> <span style="color:#204a87">NULL</span><span style="color:#000;font-weight:bold">)</span>
+	<span style="color:#000;font-weight:bold">{</span>
+		<span style="color:#000">strcpy</span><span style="color:#000;font-weight:bold">(</span><span style="color:#000">str</span><span style="color:#000;font-weight:bold">,</span> <span style="color:#4e9a06">&#34;world&#34;</span><span style="color:#000;font-weight:bold">);</span>
+		<span style="color:#000">printf</span><span style="color:#000;font-weight:bold">(</span><span style="color:#000">str</span><span style="color:#000;font-weight:bold">);</span>
+	<span style="color:#000;font-weight:bold">}</span>
+
+<span style="color:#000;font-weight:bold">}</span>
+</code></pre></div><p>c/c++是支持可变参数的，那这种类型又是咋实现的呢? <code>Bingo!</code>
+首先说点定义，不定参数的定义</p>
+<ul>
+<li>至少有一个参数。</li>
+<li>所有不定长的参数类型传入都是DWORD类型</li>
+<li>需在某个参数中描述参数的总个数或者最后一个参数赋值为结尾标记。</li>
+</ul>
+<p>就拿常用的printf说, 第一个参数就是用来确定参数个数的,只需要检查参数指向的字符串中包含多少个%来确定个数(&quot;%%&ldquo;形式的转移字符除外)
+来先看看和可变参数相关那几个宏：</p>
+<blockquote>
+<p>#define _INTSIZEOF(n)   ( (sizeof(n) + sizeof(int) - 1) &amp; ~(sizeof(int) - 1) )<br>
+#define _crt_va_start(ap,v)  ( ap = (va_list)_ADDRESSOF(v) + _INTSIZEOF(v) )<br>
+#define _crt_va_arg(ap,t)    ( *(t *)((ap += _INTSIZEOF(t)) - _INTSIZEOF(t)) )<br>
+#define _crt_va_end(ap)      ( ap = (va_list)0 )</p>
+</blockquote>
+<p>你可能这几个宏里面的位运算没看懂?</p>
+<blockquote>
+<p><strong>#define _INTSIZEOF(n)  ((sizeof(n)+sizeof(int)-1)&amp;~(sizeof(int) - 1) )</strong><br>
+//证明过程：
+对于两个正整数 x, n 总存在整数 q, r 使得<br>
+x = nq + r, 其中 0&lt;= r q, r 是唯一确定的。q = [x/n], r = x - n[x/n]. 这个是带余除法的一个简单形式。在 c 语言中， q, r 容易计算出来： q = x/n, r = x % n.<br>
+所谓把 x 按 n 对齐指的是：若 r=0, 取 qn, 若 r&gt;0, 取 (q+1)n. 这也相当于把 x 表示为：<br>
+x = nq + r', 其中 -n &lt; r' &lt;=0 //最大非正剩余<br>
+nq 是我们所求。关键是如何用 c 语言计算它。由于我们能处理标准的带余除法，所以可以把这个式子转换成一个标准的带余除法，然后加以处理：<br>
+x+n = qn + (n+r')，其中 0 x+n-1 = qn + (n+r'-1), 其中 0&lt;= n+r'-1 所以 qn = [(x+n-1)/n]n.<br>
+用 c 语言计算就是：
+((x+n-1)/n)*n<br>
+若 n 是 2 的方幂, 比如 2^m，则除为右移 m 位，乘为左移 m 位。所以把 x+n-1 的最低 m 个二进制位清 0就可以了。得到:<br>
+(x+n-1) &amp; (~(n-1))</p>
+</blockquote>
+<p>上面给出关键宏的证明过程, 简单说这货就是为对齐而生的.当然这个是上对齐.对printf实现感兴趣的自行查看crt源码. 对齐这个会在crt的源码很多地方看到甚至你们以后最简单的strlen里面.<br>
+好吧, 来个简单的例子.  相信看懂什么几个宏的玩家，在结合我们开始说的那种栈帧图, 搞定这个so easy!</p>
+<div class="highlight"><pre tabindex="0" style="background-color:#f8f8f8;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-cpp" data-lang="cpp"><span style="color:#8f5902;font-style:italic">#include</span> <span style="color:#8f5902;font-style:italic">&lt;stdarg.h&gt;</span><span style="color:#8f5902;font-style:italic">
+</span><span style="color:#8f5902;font-style:italic"></span><span style="color:#204a87;font-weight:bold">int</span> <span style="color:#000">Sum</span><span style="color:#000;font-weight:bold">(</span><span style="color:#204a87;font-weight:bold">int</span> <span style="color:#000">nCount</span><span style="color:#000;font-weight:bold">,</span> <span style="color:#000;font-weight:bold">...)</span>
+<span style="color:#000;font-weight:bold">{</span>
+	<span style="color:#204a87;font-weight:bold">if</span> <span style="color:#000;font-weight:bold">(</span><span style="color:#000">nCount</span> <span style="color:#ce5c00;font-weight:bold">&lt;=</span> <span style="color:#0000cf;font-weight:bold">0</span><span style="color:#000;font-weight:bold">)</span>
+		<span style="color:#204a87;font-weight:bold">return</span> <span style="color:#0000cf;font-weight:bold">0</span><span style="color:#000;font-weight:bold">;</span>
+	<span style="color:#204a87;font-weight:bold">int</span> <span style="color:#000">sum</span> <span style="color:#ce5c00;font-weight:bold">=</span> <span style="color:#0000cf;font-weight:bold">0</span><span style="color:#000;font-weight:bold">;</span>
+	<span style="color:#000">va_list</span> <span style="color:#000">argptr</span><span style="color:#000;font-weight:bold">;</span>
+	<span style="color:#000">va_start</span><span style="color:#000;font-weight:bold">(</span><span style="color:#000">argptr</span><span style="color:#000;font-weight:bold">,</span> <span style="color:#000">nCount</span><span style="color:#000;font-weight:bold">);</span>
+	<span style="color:#204a87;font-weight:bold">for</span> <span style="color:#000;font-weight:bold">(</span><span style="color:#204a87;font-weight:bold">int</span> <span style="color:#000">i</span> <span style="color:#ce5c00;font-weight:bold">=</span> <span style="color:#0000cf;font-weight:bold">0</span><span style="color:#000;font-weight:bold">;</span> <span style="color:#000">i</span> <span style="color:#ce5c00;font-weight:bold">&lt;</span> <span style="color:#000">nCount</span><span style="color:#000;font-weight:bold">;</span> <span style="color:#000">i</span><span style="color:#ce5c00;font-weight:bold">++</span><span style="color:#000;font-weight:bold">)</span>
+		<span style="color:#000">sum</span> <span style="color:#ce5c00;font-weight:bold">+=</span> <span style="color:#000">va_arg</span><span style="color:#000;font-weight:bold">(</span><span style="color:#000">argptr</span><span style="color:#000;font-weight:bold">,</span> <span style="color:#204a87;font-weight:bold">int</span><span style="color:#000;font-weight:bold">);</span>
+	<span style="color:#000">va_end</span><span style="color:#000;font-weight:bold">(</span><span style="color:#000">argptr</span><span style="color:#000;font-weight:bold">);</span>
+	<span style="color:#204a87;font-weight:bold">return</span> <span style="color:#000">sum</span><span style="color:#000;font-weight:bold">;</span>
+<span style="color:#000;font-weight:bold">}</span>
+<span style="color:#204a87;font-weight:bold">int</span> <span style="color:#000">main</span><span style="color:#000;font-weight:bold">()</span>
+<span style="color:#000;font-weight:bold">{</span>
+    <span style="color:#000">printf</span><span style="color:#000;font-weight:bold">(</span><span style="color:#4e9a06">&#34;%d &#34;</span><span style="color:#000;font-weight:bold">,</span><span style="color:#000">Sum</span><span style="color:#000;font-weight:bold">(</span><span style="color:#0000cf;font-weight:bold">5</span><span style="color:#000;font-weight:bold">,</span><span style="color:#0000cf;font-weight:bold">1</span><span style="color:#000;font-weight:bold">,</span><span style="color:#0000cf;font-weight:bold">2</span><span style="color:#000;font-weight:bold">,</span><span style="color:#0000cf;font-weight:bold">3</span><span style="color:#000;font-weight:bold">,</span><span style="color:#0000cf;font-weight:bold">4</span><span style="color:#000;font-weight:bold">,</span><span style="color:#0000cf;font-weight:bold">5</span><span style="color:#000;font-weight:bold">));</span>
+    <span style="color:#204a87;font-weight:bold">return</span> <span style="color:#0000cf;font-weight:bold">0</span><span style="color:#000;font-weight:bold">;</span>
+<span style="color:#000;font-weight:bold">}</span>
+</code></pre></div><p>因为说函数参数, 顺带在提下对象做参数传递的情况. 正常情况下不要传对象,这样一方面会导致不必要的复制, 再者如果你的class 里面带有资源, 但是你又没写深复制构造, 好吧悲剧开始啦.</p>
+<p>示例如下:</p>
+<div class="highlight"><pre tabindex="0" style="background-color:#f8f8f8;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-cpp" data-lang="cpp"><span style="color:#204a87;font-weight:bold">class</span> <span style="color:#000">String</span>
+<span style="color:#000;font-weight:bold">{</span>
+<span style="color:#204a87;font-weight:bold">public</span><span style="color:#ce5c00;font-weight:bold">:</span>
+	<span style="color:#000">String</span><span style="color:#000;font-weight:bold">()</span>
+	<span style="color:#000;font-weight:bold">{</span>
+		<span style="color:#000">m_pBuffer</span> <span style="color:#ce5c00;font-weight:bold">=</span> <span style="color:#204a87;font-weight:bold">new</span> <span style="color:#204a87;font-weight:bold">char</span><span style="color:#000;font-weight:bold">[</span><span style="color:#0000cf;font-weight:bold">10</span><span style="color:#000;font-weight:bold">];</span>
+		<span style="color:#000">strcpy</span><span style="color:#000;font-weight:bold">(</span><span style="color:#000">m_pBuffer</span><span style="color:#000;font-weight:bold">,</span> <span style="color:#4e9a06">&#34;Hello&#34;</span><span style="color:#000;font-weight:bold">);</span>
+	<span style="color:#000;font-weight:bold">}</span>
+	<span style="color:#ce5c00;font-weight:bold">~</span><span style="color:#000">String</span><span style="color:#000;font-weight:bold">()</span>
+	<span style="color:#000;font-weight:bold">{</span>
+		<span style="color:#204a87;font-weight:bold">if</span> <span style="color:#000;font-weight:bold">(</span><span style="color:#000">m_pBuffer</span> <span style="color:#ce5c00;font-weight:bold">!=</span> <span style="color:#204a87">NULL</span><span style="color:#000;font-weight:bold">)</span>
+		<span style="color:#000;font-weight:bold">{</span>
+			<span style="color:#000">cout</span> <span style="color:#ce5c00;font-weight:bold">&lt;&lt;</span><span style="color:#4e9a06">&#34;~String::&#34;</span><span style="color:#ce5c00;font-weight:bold">&lt;&lt;</span> <span style="color:#ce5c00;font-weight:bold">++</span><span style="color:#000">m_nCounter</span><span style="color:#ce5c00;font-weight:bold">&lt;&lt;</span> <span style="color:#000">endl</span><span style="color:#000;font-weight:bold">;</span>
+			<span style="color:#204a87;font-weight:bold">delete</span> <span style="color:#000;font-weight:bold">[]</span><span style="color:#000">m_pBuffer</span><span style="color:#000;font-weight:bold">;</span>
+			<span style="color:#000">m_pBuffer</span> <span style="color:#ce5c00;font-weight:bold">=</span> <span style="color:#204a87">NULL</span><span style="color:#000;font-weight:bold">;</span>
+		<span style="color:#000;font-weight:bold">}</span>
+
+	<span style="color:#000;font-weight:bold">}</span>
+	<span style="color:#204a87;font-weight:bold">const</span> <span style="color:#204a87;font-weight:bold">char</span><span style="color:#ce5c00;font-weight:bold">*</span> <span style="color:#000">getBuffer</span><span style="color:#000;font-weight:bold">()</span>
+	<span style="color:#000;font-weight:bold">{</span>
+		<span style="color:#204a87;font-weight:bold">return</span> <span style="color:#000">m_pBuffer</span><span style="color:#000;font-weight:bold">;</span>
+	<span style="color:#000;font-weight:bold">}</span>
+<span style="color:#204a87;font-weight:bold">private</span><span style="color:#ce5c00;font-weight:bold">:</span>
+	<span style="color:#204a87;font-weight:bold">char</span> <span style="color:#ce5c00;font-weight:bold">*</span><span style="color:#000">m_pBuffer</span><span style="color:#000;font-weight:bold">;</span>
+	<span style="color:#204a87;font-weight:bold">static</span> <span style="color:#204a87;font-weight:bold">int</span> <span style="color:#000">m_nCounter</span><span style="color:#000;font-weight:bold">;</span>
+<span style="color:#000;font-weight:bold">};</span>
+<span style="color:#204a87;font-weight:bold">int</span> <span style="color:#000">String</span><span style="color:#ce5c00;font-weight:bold">::</span><span style="color:#000">m_nCounter</span> <span style="color:#ce5c00;font-weight:bold">=</span> <span style="color:#0000cf;font-weight:bold">0</span><span style="color:#000;font-weight:bold">;</span>
+<span style="color:#204a87;font-weight:bold">void</span> <span style="color:#000">ShowTime</span><span style="color:#000;font-weight:bold">(</span><span style="color:#000">String</span> <span style="color:#000">src</span><span style="color:#000;font-weight:bold">)</span>
+<span style="color:#000;font-weight:bold">{</span>
+	<span style="color:#000">cout</span> <span style="color:#ce5c00;font-weight:bold">&lt;&lt;</span> <span style="color:#000">src</span><span style="color:#000;font-weight:bold">.</span><span style="color:#000">getBuffer</span><span style="color:#000;font-weight:bold">()</span><span style="color:#ce5c00;font-weight:bold">&lt;&lt;</span> <span style="color:#000">endl</span><span style="color:#000;font-weight:bold">;</span>
+<span style="color:#000;font-weight:bold">}</span>
+<span style="color:#204a87;font-weight:bold">void</span> <span style="color:#000">testStr</span><span style="color:#000;font-weight:bold">(</span><span style="color:#204a87;font-weight:bold">void</span><span style="color:#000;font-weight:bold">)</span>
+<span style="color:#000;font-weight:bold">{</span>
+	<span style="color:#000">String</span> <span style="color:#000">str</span><span style="color:#000;font-weight:bold">;</span>
+	<span style="color:#000">ShowTime</span><span style="color:#000;font-weight:bold">(</span><span style="color:#000">str</span><span style="color:#000;font-weight:bold">);</span>
+<span style="color:#000;font-weight:bold">}</span>
+</code></pre></div><p>卧槽, 这个析构竟然调用啦2次.马丹,这不科学.好吧,这就是默认浅复制构造引起的bitcopy的神奇之处.<br>
+解决方案差不多就2种:</p>
+<ul>
+<li>写个深赋值构造,把整块内存copy过来</li>
+<li>引用计数</li>
+</ul>
+<p>说到<code>引用计数</code>, <code>shared_ptr</code>自行google.</p>
+<h3 id="0x05-函数返回值">0x05 函数返回值</h3>
+<blockquote>
+<p>函数调用结束后, <code>ret</code>指令执行后为什么可以返回到函数调用的下一条指令呢?</p>
+</blockquote>
+<p><code>call</code>指令被执行后,该指令同时还会做另一件事,把下条指令所在的地址压入栈中. 执行<code>call</code>指令后, 由于有压栈操作,<code>esp</code>被减4.当函数执行到<code>ret</code>指令时,当前<code>esp</code>已经被平衡.<br>
+函数退出前, 会执行<code>ret</code>指令, 这个指令取<code>esp</code>所指向的4字节作为函数的返回地址值跟下<code>eip</code>,程序回到返回地址处，同时执行<code>esp +4</code> 操作,以释放返回地址的空间,平衡栈顶. <br>
+前面说都是<code>call</code>和<code>ret</code>的调用细节,介绍栈结构中函数的运行机制.</p>
+<blockquote>
+<p>那么函数的返回值是如何得到的呢？</p>
+</blockquote>
+<p>通常编译器都是使用<code>eax</code>来保存返回值.<br>
+通常eax作为返回值,只有在基类数据类型为sizeof(type)小于等于4的自定义类型.</p>
+<div class="highlight"><pre tabindex="0" style="background-color:#f8f8f8;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-cpp" data-lang="cpp"><span style="color:#204a87;font-weight:bold">int</span> <span style="color:#000">GetAddr</span><span style="color:#000;font-weight:bold">(</span><span style="color:#204a87;font-weight:bold">int</span> <span style="color:#000">nNum</span><span style="color:#000;font-weight:bold">)</span>
+<span style="color:#000;font-weight:bold">{</span>
+	<span style="color:#204a87;font-weight:bold">int</span> <span style="color:#000">nAddr</span> <span style="color:#ce5c00;font-weight:bold">=</span> <span style="color:#ce5c00;font-weight:bold">*</span><span style="color:#000;font-weight:bold">(</span><span style="color:#204a87;font-weight:bold">int</span><span style="color:#ce5c00;font-weight:bold">*</span><span style="color:#000;font-weight:bold">)(</span><span style="color:#ce5c00;font-weight:bold">&amp;</span><span style="color:#000">nNum</span> <span style="color:#ce5c00;font-weight:bold">-</span> <span style="color:#0000cf;font-weight:bold">1</span><span style="color:#000;font-weight:bold">);</span>
+	<span style="color:#204a87;font-weight:bold">return</span> <span style="color:#000">nAddr</span><span style="color:#000;font-weight:bold">;</span>
+<span style="color:#000;font-weight:bold">}</span>
+
+<span style="color:#204a87;font-weight:bold">void</span> <span style="color:#000">testRetFunc</span><span style="color:#000;font-weight:bold">(</span><span style="color:#204a87;font-weight:bold">void</span><span style="color:#000;font-weight:bold">)</span>
+<span style="color:#000;font-weight:bold">{</span>
+	<span style="color:#204a87;font-weight:bold">int</span> <span style="color:#000">nAddr</span> <span style="color:#ce5c00;font-weight:bold">=</span> <span style="color:#000">GetAddr</span><span style="color:#000;font-weight:bold">(</span><span style="color:#0000cf;font-weight:bold">5</span><span style="color:#000;font-weight:bold">);</span>
+	<span style="color:#000">cout</span> <span style="color:#ce5c00;font-weight:bold">&lt;&lt;</span> <span style="color:#000">nAddr</span> <span style="color:#ce5c00;font-weight:bold">&lt;&lt;</span><span style="color:#000">endl</span><span style="color:#000;font-weight:bold">;</span>
+<span style="color:#000;font-weight:bold">}</span>
+
+	<span style="color:#204a87;font-weight:bold">int</span> <span style="color:#000">nAddr</span> <span style="color:#ce5c00;font-weight:bold">=</span> <span style="color:#ce5c00;font-weight:bold">*</span><span style="color:#000;font-weight:bold">(</span><span style="color:#204a87;font-weight:bold">int</span><span style="color:#ce5c00;font-weight:bold">*</span><span style="color:#000;font-weight:bold">)(</span><span style="color:#ce5c00;font-weight:bold">&amp;</span><span style="color:#000">nNum</span> <span style="color:#ce5c00;font-weight:bold">-</span> <span style="color:#0000cf;font-weight:bold">1</span><span style="color:#000;font-weight:bold">);</span>
+<span style="color:#0000cf;font-weight:bold">00411</span><span style="color:#000">B3E</span> <span style="color:#0000cf;font-weight:bold">8</span><span style="color:#000">D</span> <span style="color:#0000cf;font-weight:bold">45</span> <span style="color:#0000cf;font-weight:bold">08</span>         <span style="color:#000">lea</span>         <span style="color:#000">eax</span><span style="color:#000;font-weight:bold">,[</span><span style="color:#000">nNum</span><span style="color:#000;font-weight:bold">];</span><span style="color:#a40000">获取第一个参数地址</span> 
+<span style="color:#0000cf;font-weight:bold">00411</span><span style="color:#000">B41</span> <span style="color:#0000cf;font-weight:bold">83</span> <span style="color:#000">E8</span> <span style="color:#0000cf;font-weight:bold">04</span>         <span style="color:#000">sub</span>         <span style="color:#000">eax</span><span style="color:#000;font-weight:bold">,</span><span style="color:#0000cf;font-weight:bold">4</span> <span style="color:#a40000">；获取返回地址在栈中地址</span>
+<span style="color:#0000cf;font-weight:bold">00411</span><span style="color:#000">B44</span> <span style="color:#0000cf;font-weight:bold">8</span><span style="color:#000">B</span> <span style="color:#0000cf;font-weight:bold">08</span>            <span style="color:#000">mov</span>         <span style="color:#000">ecx</span><span style="color:#000;font-weight:bold">,</span><span style="color:#000">dword</span> <span style="color:#000">ptr</span> <span style="color:#000;font-weight:bold">[</span><span style="color:#000">eax</span><span style="color:#000;font-weight:bold">]</span> 
+<span style="color:#0000cf;font-weight:bold">00411</span><span style="color:#000">B46</span> <span style="color:#0000cf;font-weight:bold">89</span> <span style="color:#0000cf;font-weight:bold">4</span><span style="color:#000">D</span> <span style="color:#000">F8</span>         <span style="color:#000">mov</span>         <span style="color:#000">dword</span> <span style="color:#000">ptr</span> <span style="color:#000;font-weight:bold">[</span><span style="color:#000">nAddr</span><span style="color:#000;font-weight:bold">],</span><span style="color:#000">ecx</span><span style="color:#a40000">；赋值个局部变量</span> 
+	<span style="color:#204a87;font-weight:bold">return</span> <span style="color:#000">nAddr</span><span style="color:#000;font-weight:bold">;</span>
+<span style="color:#0000cf;font-weight:bold">00411</span><span style="color:#000">B49</span> <span style="color:#0000cf;font-weight:bold">8</span><span style="color:#000">B</span> <span style="color:#0000cf;font-weight:bold">45</span> <span style="color:#000">F8</span>         <span style="color:#000">mov</span>         <span style="color:#000">eax</span><span style="color:#000;font-weight:bold">,</span><span style="color:#000">dword</span> <span style="color:#000">ptr</span> <span style="color:#000;font-weight:bold">[</span><span style="color:#000">nAddr</span><span style="color:#000;font-weight:bold">]</span> <span style="color:#a40000">；获取局部变量数据传入</span><span style="color:#000">eax</span><span style="color:#a40000">，作为函数返回值</span>
+</code></pre></div><p>上面只是知道小于4个byte,为了举个大于4且鲜明的例子,我们说下臭名昭著的<code>返回对象</code>.</p>
+<div class="highlight"><pre tabindex="0" style="background-color:#f8f8f8;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-cpp" data-lang="cpp"><span style="color:#204a87;font-weight:bold">class</span> <span style="color:#000">String</span>
+<span style="color:#000;font-weight:bold">{</span>
+<span style="color:#204a87;font-weight:bold">public</span><span style="color:#ce5c00;font-weight:bold">:</span>
+	<span style="color:#000">String</span><span style="color:#000;font-weight:bold">(</span><span style="color:#204a87;font-weight:bold">const</span> <span style="color:#204a87;font-weight:bold">char</span> <span style="color:#ce5c00;font-weight:bold">*</span> <span style="color:#000">str</span> <span style="color:#ce5c00;font-weight:bold">=</span> <span style="color:#4e9a06">&#34;&#34;</span><span style="color:#000;font-weight:bold">);</span>
+	<span style="color:#000">String</span><span style="color:#000;font-weight:bold">(</span><span style="color:#204a87;font-weight:bold">const</span> <span style="color:#000">String</span> <span style="color:#ce5c00;font-weight:bold">&amp;</span><span style="color:#000">other</span><span style="color:#000;font-weight:bold">);</span>
+	<span style="color:#ce5c00;font-weight:bold">~</span><span style="color:#000">String</span><span style="color:#000;font-weight:bold">();</span>
+	<span style="color:#000">String</span><span style="color:#ce5c00;font-weight:bold">&amp;</span> <span style="color:#204a87;font-weight:bold">operator</span> <span style="color:#ce5c00;font-weight:bold">=</span> <span style="color:#000;font-weight:bold">(</span><span style="color:#204a87;font-weight:bold">const</span> <span style="color:#000">String</span><span style="color:#ce5c00;font-weight:bold">&amp;</span> <span style="color:#000">other</span><span style="color:#000;font-weight:bold">);</span>
+<span style="color:#204a87;font-weight:bold">private</span><span style="color:#ce5c00;font-weight:bold">:</span>
+	<span style="color:#204a87;font-weight:bold">char</span> <span style="color:#ce5c00;font-weight:bold">*</span><span style="color:#000">m_data</span><span style="color:#000;font-weight:bold">;</span>
+<span style="color:#000;font-weight:bold">};</span>
+
+<span style="color:#000">String</span><span style="color:#ce5c00;font-weight:bold">::</span><span style="color:#000">String</span><span style="color:#000;font-weight:bold">(</span><span style="color:#204a87;font-weight:bold">const</span> <span style="color:#204a87;font-weight:bold">char</span><span style="color:#ce5c00;font-weight:bold">*</span> <span style="color:#000">str</span><span style="color:#000;font-weight:bold">)</span>
+<span style="color:#000;font-weight:bold">{</span>
+	<span style="color:#000">cout</span> <span style="color:#ce5c00;font-weight:bold">&lt;&lt;</span> <span style="color:#4e9a06">&#34;String::String&#34;</span><span style="color:#ce5c00;font-weight:bold">&lt;&lt;</span><span style="color:#000">endl</span><span style="color:#000;font-weight:bold">;</span>
+	<span style="color:#204a87;font-weight:bold">if</span> <span style="color:#000;font-weight:bold">(</span><span style="color:#000">str</span> <span style="color:#ce5c00;font-weight:bold">==</span> <span style="color:#204a87">NULL</span><span style="color:#000;font-weight:bold">)</span>
+	<span style="color:#000;font-weight:bold">{</span>
+		<span style="color:#000">m_data</span> <span style="color:#ce5c00;font-weight:bold">=</span> <span style="color:#204a87;font-weight:bold">new</span> <span style="color:#204a87;font-weight:bold">char</span><span style="color:#000;font-weight:bold">[</span><span style="color:#0000cf;font-weight:bold">1</span><span style="color:#000;font-weight:bold">];</span>
+		<span style="color:#ce5c00;font-weight:bold">*</span><span style="color:#000">m_data</span> <span style="color:#ce5c00;font-weight:bold">=</span> <span style="color:#4e9a06">&#39;\0&#39;</span><span style="color:#000;font-weight:bold">;</span>
+	<span style="color:#000;font-weight:bold">}</span>
+	<span style="color:#204a87;font-weight:bold">else</span>
+	<span style="color:#000;font-weight:bold">{</span>
+		<span style="color:#204a87;font-weight:bold">int</span> <span style="color:#000">length</span> <span style="color:#ce5c00;font-weight:bold">=</span> <span style="color:#000">strlen</span><span style="color:#000;font-weight:bold">(</span><span style="color:#000">str</span><span style="color:#000;font-weight:bold">);</span>
+		<span style="color:#000">m_data</span> <span style="color:#ce5c00;font-weight:bold">=</span> <span style="color:#204a87;font-weight:bold">new</span> <span style="color:#204a87;font-weight:bold">char</span><span style="color:#000;font-weight:bold">[</span><span style="color:#000">length</span> <span style="color:#ce5c00;font-weight:bold">+</span> <span style="color:#0000cf;font-weight:bold">1</span><span style="color:#000;font-weight:bold">];</span>
+		<span style="color:#000">strcpy</span><span style="color:#000;font-weight:bold">(</span><span style="color:#000">m_data</span><span style="color:#000;font-weight:bold">,</span> <span style="color:#000">str</span><span style="color:#000;font-weight:bold">);</span>
+	<span style="color:#000;font-weight:bold">}</span>
+<span style="color:#000;font-weight:bold">}</span>
+
+<span style="color:#000">String</span><span style="color:#ce5c00;font-weight:bold">::~</span><span style="color:#000">String</span><span style="color:#000;font-weight:bold">()</span>
+<span style="color:#000;font-weight:bold">{</span>
+	<span style="color:#000">cout</span> <span style="color:#ce5c00;font-weight:bold">&lt;&lt;</span> <span style="color:#4e9a06">&#34;String::~String&#34;</span> <span style="color:#ce5c00;font-weight:bold">&lt;&lt;</span> <span style="color:#000">endl</span><span style="color:#000;font-weight:bold">;</span>
+	<span style="color:#204a87;font-weight:bold">delete</span> <span style="color:#000;font-weight:bold">[]</span><span style="color:#000">m_data</span><span style="color:#000;font-weight:bold">;</span>
+<span style="color:#000;font-weight:bold">}</span>
+
+<span style="color:#000">String</span><span style="color:#ce5c00;font-weight:bold">::</span><span style="color:#000">String</span><span style="color:#000;font-weight:bold">(</span><span style="color:#204a87;font-weight:bold">const</span> <span style="color:#000">String</span> <span style="color:#ce5c00;font-weight:bold">&amp;</span><span style="color:#000">other</span><span style="color:#000;font-weight:bold">)</span>
+<span style="color:#000;font-weight:bold">{</span>
+	<span style="color:#000">cout</span> <span style="color:#ce5c00;font-weight:bold">&lt;&lt;</span> <span style="color:#4e9a06">&#34;String::Copy&#34;</span> <span style="color:#ce5c00;font-weight:bold">&lt;&lt;</span> <span style="color:#000">endl</span><span style="color:#000;font-weight:bold">;</span>
+	<span style="color:#204a87;font-weight:bold">int</span> <span style="color:#000">length</span> <span style="color:#ce5c00;font-weight:bold">=</span> <span style="color:#000">strlen</span><span style="color:#000;font-weight:bold">(</span><span style="color:#000">other</span><span style="color:#000;font-weight:bold">.</span><span style="color:#000">m_data</span><span style="color:#000;font-weight:bold">);</span>
+	<span style="color:#000">m_data</span> <span style="color:#ce5c00;font-weight:bold">=</span> <span style="color:#204a87;font-weight:bold">new</span> <span style="color:#204a87;font-weight:bold">char</span><span style="color:#000;font-weight:bold">[</span><span style="color:#000">length</span> <span style="color:#ce5c00;font-weight:bold">+</span> <span style="color:#0000cf;font-weight:bold">1</span><span style="color:#000;font-weight:bold">];</span>
+	<span style="color:#000">strcpy</span><span style="color:#000;font-weight:bold">(</span><span style="color:#000">m_data</span><span style="color:#000;font-weight:bold">,</span> <span style="color:#000">other</span><span style="color:#000;font-weight:bold">.</span><span style="color:#000">m_data</span><span style="color:#000;font-weight:bold">);</span>
+<span style="color:#000;font-weight:bold">}</span>
+
+<span style="color:#000">String</span><span style="color:#ce5c00;font-weight:bold">&amp;</span> <span style="color:#000">String</span><span style="color:#ce5c00;font-weight:bold">::</span><span style="color:#204a87;font-weight:bold">operator</span><span style="color:#ce5c00;font-weight:bold">=</span><span style="color:#000;font-weight:bold">(</span><span style="color:#204a87;font-weight:bold">const</span> <span style="color:#000">String</span><span style="color:#ce5c00;font-weight:bold">&amp;</span> <span style="color:#000">other</span><span style="color:#000;font-weight:bold">)</span>
+<span style="color:#000;font-weight:bold">{</span>
+	<span style="color:#000">cout</span> <span style="color:#ce5c00;font-weight:bold">&lt;&lt;</span> <span style="color:#4e9a06">&#34;String::=&#34;</span> <span style="color:#ce5c00;font-weight:bold">&lt;&lt;</span> <span style="color:#000">endl</span><span style="color:#000;font-weight:bold">;</span>
+	<span style="color:#204a87;font-weight:bold">if</span> <span style="color:#000;font-weight:bold">(</span><span style="color:#204a87;font-weight:bold">this</span> <span style="color:#ce5c00;font-weight:bold">!=</span> <span style="color:#ce5c00;font-weight:bold">&amp;</span><span style="color:#000">other</span><span style="color:#000;font-weight:bold">)</span>
+	<span style="color:#000;font-weight:bold">{</span>
+		<span style="color:#204a87;font-weight:bold">char</span> <span style="color:#ce5c00;font-weight:bold">*</span><span style="color:#000">temp</span> <span style="color:#ce5c00;font-weight:bold">=</span> <span style="color:#204a87;font-weight:bold">new</span> <span style="color:#204a87;font-weight:bold">char</span><span style="color:#000;font-weight:bold">[</span><span style="color:#000">strlen</span><span style="color:#000;font-weight:bold">(</span><span style="color:#000">other</span><span style="color:#000;font-weight:bold">.</span><span style="color:#000">m_data</span><span style="color:#000;font-weight:bold">)</span> <span style="color:#ce5c00;font-weight:bold">+</span> <span style="color:#0000cf;font-weight:bold">1</span><span style="color:#000;font-weight:bold">];</span>
+		<span style="color:#000">strcpy</span><span style="color:#000;font-weight:bold">(</span><span style="color:#000">temp</span><span style="color:#000;font-weight:bold">,</span> <span style="color:#000">other</span><span style="color:#000;font-weight:bold">.</span><span style="color:#000">m_data</span><span style="color:#000;font-weight:bold">);</span>
+		<span style="color:#204a87;font-weight:bold">delete</span> <span style="color:#000;font-weight:bold">[]</span><span style="color:#000">m_data</span><span style="color:#000;font-weight:bold">;</span>
+		<span style="color:#000">m_data</span> <span style="color:#ce5c00;font-weight:bold">=</span> <span style="color:#000">temp</span><span style="color:#000;font-weight:bold">;</span>
+	<span style="color:#000;font-weight:bold">}</span>
+	<span style="color:#204a87;font-weight:bold">return</span> <span style="color:#ce5c00;font-weight:bold">*</span><span style="color:#204a87;font-weight:bold">this</span><span style="color:#000;font-weight:bold">;</span>
+
+<span style="color:#000;font-weight:bold">}</span>
+<span style="color:#000">String</span> <span style="color:#000">GetString</span><span style="color:#000;font-weight:bold">()</span>
+<span style="color:#000;font-weight:bold">{</span>
+	<span style="color:#000">String</span> <span style="color:#000">str</span><span style="color:#000;font-weight:bold">(</span><span style="color:#4e9a06">&#34;Hello Folly!&#34;</span><span style="color:#000;font-weight:bold">);</span>
+	<span style="color:#204a87;font-weight:bold">return</span> <span style="color:#000">str</span><span style="color:#000;font-weight:bold">;</span>
+<span style="color:#000;font-weight:bold">}</span>
+<span style="color:#204a87;font-weight:bold">void</span> <span style="color:#000">testRetObj</span><span style="color:#000;font-weight:bold">()</span>
+<span style="color:#000;font-weight:bold">{</span>
+	<span style="color:#000">String</span> <span style="color:#000">str</span> <span style="color:#ce5c00;font-weight:bold">=</span> <span style="color:#000">GetString</span><span style="color:#000;font-weight:bold">();</span>
+<span style="color:#000;font-weight:bold">}</span>
+<span style="color:#8f5902;font-style:italic">//VS下测试结果
+</span><span style="color:#8f5902;font-style:italic"></span><span style="color:#000">String</span><span style="color:#ce5c00;font-weight:bold">::</span><span style="color:#000">String</span>
+<span style="color:#000">String</span><span style="color:#ce5c00;font-weight:bold">::</span><span style="color:#000">Copy</span>
+<span style="color:#000">String</span><span style="color:#ce5c00;font-weight:bold">::~</span><span style="color:#000">String</span>
+<span style="color:#000">String</span><span style="color:#ce5c00;font-weight:bold">::~</span><span style="color:#000">String</span>
+<span style="color:#8f5902;font-style:italic">//g++测试结果
+</span><span style="color:#8f5902;font-style:italic"></span><span style="color:#000">String</span><span style="color:#ce5c00;font-weight:bold">::</span><span style="color:#000">String</span>
+<span style="color:#000">String</span><span style="color:#ce5c00;font-weight:bold">::~</span><span style="color:#000">String</span>
+</code></pre></div><hr>
+<p>瞬时有种刷屏的快感,言归正传,好吧这是在<code>debug</code>环境下没开优化的情况,<code>VS</code>输出那种结果情理之中，gcc这里已经是做啦优化的. 针对<code>VS</code>下的情况, msdn上有篇不错文章说
+<a href="http://msdn.microsoft.com/en-us/library/ms364057%28VS.80%29.aspx" target="_blank" rel="noopener">RVO and NRVO</a>优化.</p>
+<p>下面是针对vs下的汇编分析：</p>
+<div class="highlight"><pre tabindex="0" style="background-color:#f8f8f8;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-cpp" data-lang="cpp">	<span style="color:#000">String</span> <span style="color:#000">str</span><span style="color:#000;font-weight:bold">(</span><span style="color:#4e9a06">&#34;Hello Folly!&#34;</span><span style="color:#000;font-weight:bold">);</span>
+<span style="color:#0000cf;font-weight:bold">00411</span><span style="color:#000">C97</span> <span style="color:#0000cf;font-weight:bold">68</span> <span style="color:#0000cf;font-weight:bold">60</span> <span style="color:#0000cf;font-weight:bold">77</span> <span style="color:#0000cf;font-weight:bold">41</span> <span style="color:#0000cf;font-weight:bold">00</span>   <span style="color:#000">push</span>        <span style="color:#000">offset</span> <span style="color:#000">string</span> <span style="color:#4e9a06">&#34;Hello Folly!&#34;</span> <span style="color:#000;font-weight:bold">(</span><span style="color:#0000cf;font-weight:bold">417760</span><span style="color:#000">h</span><span style="color:#000;font-weight:bold">)</span> 
+<span style="color:#0000cf;font-weight:bold">00411</span><span style="color:#000">C9C</span> <span style="color:#0000cf;font-weight:bold">8</span><span style="color:#000">D</span> <span style="color:#0000cf;font-weight:bold">4</span><span style="color:#000">D</span> <span style="color:#000">EC</span>         <span style="color:#000">lea</span>         <span style="color:#000">ecx</span><span style="color:#000;font-weight:bold">,[</span><span style="color:#000">ebp</span><span style="color:#ce5c00;font-weight:bold">-</span><span style="color:#0000cf;font-weight:bold">14</span><span style="color:#000">h</span><span style="color:#000;font-weight:bold">]</span> <span style="color:#a40000">；传递个</span><span style="color:#000">this指针</span><span style="color:#a40000">，调构造</span>
+<span style="color:#0000cf;font-weight:bold">00411</span><span style="color:#000">C9F</span> <span style="color:#000">E8</span> <span style="color:#0000cf;font-weight:bold">04</span> <span style="color:#000">F6</span> <span style="color:#000">FF</span> <span style="color:#000">FF</span>   <span style="color:#000">call</span>        <span style="color:#000">String</span><span style="color:#ce5c00;font-weight:bold">::</span><span style="color:#000">String</span> <span style="color:#000;font-weight:bold">(</span><span style="color:#0000cf;font-weight:bold">4112</span><span style="color:#000">A8h</span><span style="color:#000;font-weight:bold">)</span> 
+<span style="color:#0000cf;font-weight:bold">00411</span><span style="color:#000">CA4</span> <span style="color:#000">C7</span> <span style="color:#0000cf;font-weight:bold">45</span> <span style="color:#000">FC</span> <span style="color:#0000cf;font-weight:bold">01</span> <span style="color:#0000cf;font-weight:bold">00</span> <span style="color:#0000cf;font-weight:bold">00</span> <span style="color:#0000cf;font-weight:bold">00</span> <span style="color:#000">mov</span>         <span style="color:#000">dword</span> <span style="color:#000">ptr</span> <span style="color:#000;font-weight:bold">[</span><span style="color:#000">ebp</span><span style="color:#ce5c00;font-weight:bold">-</span><span style="color:#0000cf;font-weight:bold">4</span><span style="color:#000;font-weight:bold">],</span><span style="color:#0000cf;font-weight:bold">1</span><span style="color:#a40000">；对象技术群，调试做个参考。</span> 
+	<span style="color:#204a87;font-weight:bold">return</span> <span style="color:#000">str</span><span style="color:#000;font-weight:bold">;</span>
+<span style="color:#0000cf;font-weight:bold">00411</span><span style="color:#000">CAB</span> <span style="color:#0000cf;font-weight:bold">8</span><span style="color:#000">D</span> <span style="color:#0000cf;font-weight:bold">45</span> <span style="color:#000">EC</span>         <span style="color:#000">lea</span>         <span style="color:#000">eax</span><span style="color:#000;font-weight:bold">,[</span><span style="color:#000">ebp</span><span style="color:#ce5c00;font-weight:bold">-</span><span style="color:#0000cf;font-weight:bold">14</span><span style="color:#000">h</span><span style="color:#000;font-weight:bold">]</span><span style="color:#a40000">；获取局部对象首地址</span> 
+<span style="color:#0000cf;font-weight:bold">00411</span><span style="color:#000">CAE</span> <span style="color:#0000cf;font-weight:bold">50</span>               <span style="color:#000">push</span>        <span style="color:#000">eax</span><span style="color:#a40000">；入栈</span>  
+<span style="color:#0000cf;font-weight:bold">00411</span><span style="color:#000">CAF</span> <span style="color:#0000cf;font-weight:bold">8</span><span style="color:#000">B</span> <span style="color:#0000cf;font-weight:bold">4</span><span style="color:#000">D</span> <span style="color:#0000cf;font-weight:bold">08</span>         <span style="color:#000">mov</span>         <span style="color:#000">ecx</span><span style="color:#000;font-weight:bold">,</span><span style="color:#000">dword</span> <span style="color:#000">ptr</span> <span style="color:#000;font-weight:bold">[</span><span style="color:#000">ebp</span><span style="color:#ce5c00;font-weight:bold">+</span><span style="color:#0000cf;font-weight:bold">8</span><span style="color:#000;font-weight:bold">]</span><span style="color:#a40000">；获取调用隐含的参数对象的复制构造，一局部对象的地址为参数</span>
+<span style="color:#0000cf;font-weight:bold">00411</span><span style="color:#000">CB2</span> <span style="color:#000">E8</span> <span style="color:#0000cf;font-weight:bold">9</span><span style="color:#000">C</span> <span style="color:#000">F5</span> <span style="color:#000">FF</span> <span style="color:#000">FF</span>   <span style="color:#000">call</span>        <span style="color:#000">String</span><span style="color:#ce5c00;font-weight:bold">::</span><span style="color:#000">String</span> <span style="color:#000;font-weight:bold">(</span><span style="color:#0000cf;font-weight:bold">411253</span><span style="color:#000">h</span><span style="color:#000;font-weight:bold">)</span> 
+<span style="color:#0000cf;font-weight:bold">00411</span><span style="color:#000">CB7</span> <span style="color:#0000cf;font-weight:bold">8</span><span style="color:#000">B</span> <span style="color:#0000cf;font-weight:bold">8</span><span style="color:#000">D</span> <span style="color:#0000cf;font-weight:bold">20</span> <span style="color:#000">FF</span> <span style="color:#000">FF</span> <span style="color:#000">FF</span> <span style="color:#000">mov</span>         <span style="color:#000">ecx</span><span style="color:#000;font-weight:bold">,</span><span style="color:#000">dword</span> <span style="color:#000">ptr</span> <span style="color:#000;font-weight:bold">[</span><span style="color:#000">ebp</span><span style="color:#ce5c00;font-weight:bold">-</span><span style="color:#0000cf;font-weight:bold">0E0</span><span style="color:#000">h</span><span style="color:#000;font-weight:bold">]</span> 
+<span style="color:#0000cf;font-weight:bold">00411</span><span style="color:#000">CBD</span> <span style="color:#0000cf;font-weight:bold">83</span> <span style="color:#000">C9</span> <span style="color:#0000cf;font-weight:bold">01</span>         <span style="color:#000">or</span>          <span style="color:#000">ecx</span><span style="color:#000;font-weight:bold">,</span><span style="color:#0000cf;font-weight:bold">1</span> 
+<span style="color:#0000cf;font-weight:bold">00411</span><span style="color:#000">CC0</span> <span style="color:#0000cf;font-weight:bold">89</span> <span style="color:#0000cf;font-weight:bold">8</span><span style="color:#000">D</span> <span style="color:#0000cf;font-weight:bold">20</span> <span style="color:#000">FF</span> <span style="color:#000">FF</span> <span style="color:#000">FF</span> <span style="color:#000">mov</span>         <span style="color:#000">dword</span> <span style="color:#000">ptr</span> <span style="color:#000;font-weight:bold">[</span><span style="color:#000">ebp</span><span style="color:#ce5c00;font-weight:bold">-</span><span style="color:#0000cf;font-weight:bold">0E0</span><span style="color:#000">h</span><span style="color:#000;font-weight:bold">],</span><span style="color:#000">ecx</span> 
+<span style="color:#0000cf;font-weight:bold">00411</span><span style="color:#000">CC6</span> <span style="color:#000">C6</span> <span style="color:#0000cf;font-weight:bold">45</span> <span style="color:#000">FC</span> <span style="color:#0000cf;font-weight:bold">00</span>      <span style="color:#000">mov</span>         <span style="color:#000">byte</span> <span style="color:#000">ptr</span> <span style="color:#000;font-weight:bold">[</span><span style="color:#000">ebp</span><span style="color:#ce5c00;font-weight:bold">-</span><span style="color:#0000cf;font-weight:bold">4</span><span style="color:#000;font-weight:bold">],</span><span style="color:#0000cf;font-weight:bold">0</span> 
+<span style="color:#0000cf;font-weight:bold">00411</span><span style="color:#000">CCA</span> <span style="color:#0000cf;font-weight:bold">8</span><span style="color:#000">D</span> <span style="color:#0000cf;font-weight:bold">4</span><span style="color:#000">D</span> <span style="color:#000">EC</span>         <span style="color:#000">lea</span>         <span style="color:#000">ecx</span><span style="color:#000;font-weight:bold">,[</span><span style="color:#000">ebp</span><span style="color:#ce5c00;font-weight:bold">-</span><span style="color:#0000cf;font-weight:bold">14</span><span style="color:#000">h</span><span style="color:#000;font-weight:bold">]</span> 
+<span style="color:#0000cf;font-weight:bold">00411</span><span style="color:#000">CCD</span> <span style="color:#000">E8</span> <span style="color:#0000cf;font-weight:bold">88</span> <span style="color:#000">F3</span> <span style="color:#000">FF</span> <span style="color:#000">FF</span>   <span style="color:#000">call</span>        <span style="color:#000">String</span><span style="color:#ce5c00;font-weight:bold">::~</span><span style="color:#000">String</span> <span style="color:#000;font-weight:bold">(</span><span style="color:#0000cf;font-weight:bold">41105</span><span style="color:#000">Ah</span><span style="color:#000;font-weight:bold">)</span> <span style="color:#a40000">；调用局部对象析构</span>
+<span style="color:#0000cf;font-weight:bold">00411</span><span style="color:#000">CD2</span> <span style="color:#0000cf;font-weight:bold">8</span><span style="color:#000">B</span> <span style="color:#0000cf;font-weight:bold">45</span> <span style="color:#0000cf;font-weight:bold">08</span>         <span style="color:#000">mov</span>         <span style="color:#000">eax</span><span style="color:#000;font-weight:bold">,</span><span style="color:#000">dword</span> <span style="color:#000">ptr</span> <span style="color:#000;font-weight:bold">[</span><span style="color:#000">ebp</span><span style="color:#ce5c00;font-weight:bold">+</span><span style="color:#0000cf;font-weight:bold">8</span><span style="color:#000;font-weight:bold">]</span><span style="color:#a40000">；讲参数作为返回值</span> 
+<span style="color:#000;font-weight:bold">}</span>
+</code></pre></div><blockquote>
+<p>基本上VS下等价的函数原型如下：
+<strong>String* GetString(String *str)</strong></p>
+</blockquote>
+<p><code>VS</code>在<code>Release</code>版本下产生的输出和<code>gcc</code>是一样的,那个<code>中间临时对象</code>被果断的优化啦. 对于返回值优化感兴趣的童鞋可以查下编译器的官方文档和<code>C++11</code>针对此的<code>右值引用</code>.</p>
+<h3 id="0x06-普通的类成员函数">0x06 普通的类成员函数</h3>
+<p>单独拿出这么一节啦其实就是对最开始说的调用约定的补充, 普通成员函数的调用遵循<code>thiscall</code>调用约定.<br>
+在学习<code>C++</code>的过程中,学类的都会接触到<code>this</code>指针, 类中并没有对<code>this</code>指针的定义.</p>
+<p>示例如下:</p>
+<div class="highlight"><pre tabindex="0" style="background-color:#f8f8f8;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-cpp" data-lang="cpp"><span style="color:#8f5902;font-style:italic">#include</span> <span style="color:#8f5902;font-style:italic">&lt;iostream&gt;</span><span style="color:#8f5902;font-style:italic">
+</span><span style="color:#8f5902;font-style:italic"></span><span style="color:#204a87;font-weight:bold">using</span> <span style="color:#204a87;font-weight:bold">namespace</span> <span style="color:#000">std</span><span style="color:#000;font-weight:bold">;</span>
+
+<span style="color:#204a87;font-weight:bold">class</span> <span style="color:#000">Point</span>
+<span style="color:#000;font-weight:bold">{</span>
+<span style="color:#204a87;font-weight:bold">public</span><span style="color:#ce5c00;font-weight:bold">:</span>
+    <span style="color:#000">Point</span><span style="color:#000;font-weight:bold">(</span><span style="color:#204a87;font-weight:bold">float</span> <span style="color:#000">x</span> <span style="color:#ce5c00;font-weight:bold">=</span> <span style="color:#0000cf;font-weight:bold">0.0f</span> <span style="color:#000;font-weight:bold">,</span> <span style="color:#204a87;font-weight:bold">float</span> <span style="color:#000">y</span> <span style="color:#ce5c00;font-weight:bold">=</span> <span style="color:#0000cf;font-weight:bold">0.0f</span><span style="color:#000;font-weight:bold">)</span>
+    <span style="color:#ce5c00;font-weight:bold">:</span><span style="color:#000">_x</span><span style="color:#000;font-weight:bold">(</span><span style="color:#000">x</span><span style="color:#000;font-weight:bold">),</span> <span style="color:#000">_y</span><span style="color:#000;font-weight:bold">(</span><span style="color:#000">y</span><span style="color:#000;font-weight:bold">)</span>
+    <span style="color:#000;font-weight:bold">{</span>
+    <span style="color:#000;font-weight:bold">}</span>
+    <span style="color:#204a87;font-weight:bold">virtual</span> <span style="color:#204a87;font-weight:bold">float</span> <span style="color:#000">z</span><span style="color:#000;font-weight:bold">()</span> <span style="color:#000;font-weight:bold">{</span> <span style="color:#204a87;font-weight:bold">return</span> <span style="color:#0000cf;font-weight:bold">0.0f</span><span style="color:#000;font-weight:bold">;</span> <span style="color:#000;font-weight:bold">}</span>
+<span style="color:#204a87;font-weight:bold">protected</span><span style="color:#ce5c00;font-weight:bold">:</span>
+    <span style="color:#204a87;font-weight:bold">float</span> <span style="color:#000">_x</span><span style="color:#000;font-weight:bold">,</span> <span style="color:#000">_y</span><span style="color:#000;font-weight:bold">;</span>
+<span style="color:#000;font-weight:bold">};</span>
+<span style="color:#204a87;font-weight:bold">int</span> <span style="color:#000">main</span><span style="color:#000;font-weight:bold">()</span>
+<span style="color:#000;font-weight:bold">{</span>
+    <span style="color:#000">Point</span> <span style="color:#000">p</span><span style="color:#000;font-weight:bold">;</span>
+    <span style="color:#000">cout</span> <span style="color:#ce5c00;font-weight:bold">&lt;&lt;</span> <span style="color:#204a87;font-weight:bold">sizeof</span><span style="color:#000;font-weight:bold">(</span><span style="color:#000">p</span><span style="color:#000;font-weight:bold">)</span> <span style="color:#ce5c00;font-weight:bold">&lt;&lt;</span><span style="color:#000">endl</span><span style="color:#000;font-weight:bold">;</span>
+    <span style="color:#204a87;font-weight:bold">return</span> <span style="color:#0000cf;font-weight:bold">0</span><span style="color:#000;font-weight:bold">;</span>
+<span style="color:#000;font-weight:bold">}</span>
+<span style="color:#a40000">附加以后的结果如下：</span>
+<span style="color:#000">Point</span><span style="color:#ce5c00;font-weight:bold">*</span> <span style="color:#000">Point</span><span style="color:#ce5c00;font-weight:bold">::</span><span style="color:#000">Point</span><span style="color:#000;font-weight:bold">(</span><span style="color:#000">Point</span> <span style="color:#ce5c00;font-weight:bold">*</span> <span style="color:#204a87;font-weight:bold">this</span><span style="color:#000;font-weight:bold">,</span> <span style="color:#204a87;font-weight:bold">float</span> <span style="color:#000">x</span><span style="color:#000;font-weight:bold">,</span> <span style="color:#204a87;font-weight:bold">float</span> <span style="color:#000">y</span><span style="color:#000;font-weight:bold">)</span>
+     <span style="color:#ce5c00;font-weight:bold">:</span><span style="color:#000">_x</span><span style="color:#000;font-weight:bold">(</span><span style="color:#000">x</span><span style="color:#000;font-weight:bold">),</span> <span style="color:#000">_y</span><span style="color:#000;font-weight:bold">(</span><span style="color:#000">y</span><span style="color:#000;font-weight:bold">)</span>
+ <span style="color:#000;font-weight:bold">{</span>
+     <span style="color:#204a87;font-weight:bold">this</span><span style="color:#ce5c00;font-weight:bold">-&gt;</span><span style="color:#000">__vptr_point</span> <span style="color:#ce5c00;font-weight:bold">=</span> <span style="color:#000">__vtbl_Point</span><span style="color:#000;font-weight:bold">;</span>
+     <span style="color:#204a87;font-weight:bold">this</span><span style="color:#ce5c00;font-weight:bold">-&gt;</span><span style="color:#000">_x</span> <span style="color:#ce5c00;font-weight:bold">=</span> <span style="color:#000">x</span><span style="color:#000;font-weight:bold">;</span>
+     <span style="color:#204a87;font-weight:bold">this</span><span style="color:#ce5c00;font-weight:bold">-&gt;</span><span style="color:#000">_y</span> <span style="color:#ce5c00;font-weight:bold">=</span> <span style="color:#000">y</span><span style="color:#000;font-weight:bold">;</span>
+<span style="color:#8f5902;font-style:italic">//返回this指针
+</span><span style="color:#8f5902;font-style:italic"></span>     <span style="color:#204a87;font-weight:bold">return</span> <span style="color:#204a87;font-weight:bold">this</span><span style="color:#000;font-weight:bold">;</span>
+ <span style="color:#000;font-weight:bold">}</span>
+ 
+        <span style="color:#000">Point</span><span style="color:#000;font-weight:bold">(</span><span style="color:#204a87;font-weight:bold">float</span> <span style="color:#000">x</span> <span style="color:#ce5c00;font-weight:bold">=</span> <span style="color:#0000cf;font-weight:bold">0.0f</span> <span style="color:#000;font-weight:bold">,</span> <span style="color:#204a87;font-weight:bold">float</span> <span style="color:#000">y</span> <span style="color:#ce5c00;font-weight:bold">=</span> <span style="color:#0000cf;font-weight:bold">0.0f</span><span style="color:#000;font-weight:bold">)</span>
+                <span style="color:#ce5c00;font-weight:bold">:</span><span style="color:#000">_x</span><span style="color:#000;font-weight:bold">(</span><span style="color:#000">x</span><span style="color:#000;font-weight:bold">),</span> <span style="color:#000">_y</span><span style="color:#000;font-weight:bold">(</span><span style="color:#000">y</span><span style="color:#000;font-weight:bold">)</span>
+        <span style="color:#000;font-weight:bold">{</span>
+<span style="color:#0000cf;font-weight:bold">00</span><span style="color:#000">CF1510</span>  <span style="color:#000">push</span>        <span style="color:#000">ebp</span>
+<span style="color:#0000cf;font-weight:bold">00</span><span style="color:#000">CF1511</span>  <span style="color:#000">mov</span>         <span style="color:#000">ebp</span><span style="color:#000;font-weight:bold">,</span><span style="color:#000">esp</span>
+<span style="color:#0000cf;font-weight:bold">00</span><span style="color:#000">CF1513</span>  <span style="color:#000">sub</span>         <span style="color:#000">esp</span><span style="color:#000;font-weight:bold">,</span><span style="color:#0000cf;font-weight:bold">0</span><span style="color:#000">CCh</span>
+<span style="color:#0000cf;font-weight:bold">00</span><span style="color:#000">CF1519</span>  <span style="color:#000">push</span>        <span style="color:#000">ebx</span>
+<span style="color:#0000cf;font-weight:bold">00</span><span style="color:#000">CF151A</span>  <span style="color:#000">push</span>        <span style="color:#000">esi</span>
+<span style="color:#0000cf;font-weight:bold">00</span><span style="color:#000">CF151B</span>  <span style="color:#000">push</span>        <span style="color:#000">edi</span>
+<span style="color:#0000cf;font-weight:bold">00</span><span style="color:#000">CF151C</span>  <span style="color:#000">push</span>        <span style="color:#000">ecx</span><span style="color:#a40000">；</span><span style="color:#000">ecx保存对象p的首地址</span>
+<span style="color:#0000cf;font-weight:bold">00</span><span style="color:#000">CF151D</span>  <span style="color:#000">lea</span>         <span style="color:#000">edi</span><span style="color:#000;font-weight:bold">,[</span><span style="color:#000">ebp</span><span style="color:#ce5c00;font-weight:bold">-</span><span style="color:#0000cf;font-weight:bold">0</span><span style="color:#000">CCh</span><span style="color:#000;font-weight:bold">]</span>
+<span style="color:#0000cf;font-weight:bold">00</span><span style="color:#000">CF1523</span>  <span style="color:#000">mov</span>         <span style="color:#000">ecx</span><span style="color:#000;font-weight:bold">,</span><span style="color:#0000cf;font-weight:bold">33</span><span style="color:#000">h</span>
+<span style="color:#0000cf;font-weight:bold">00</span><span style="color:#000">CF1528</span>  <span style="color:#000">mov</span>         <span style="color:#000">eax</span><span style="color:#000;font-weight:bold">,</span><span style="color:#0000cf;font-weight:bold">0</span><span style="color:#000">CCCCCCCCh</span>
+<span style="color:#0000cf;font-weight:bold">00</span><span style="color:#000">CF152D</span>  <span style="color:#000">rep</span> <span style="color:#000">stos</span>    <span style="color:#000">dword</span> <span style="color:#000">ptr</span> <span style="color:#f57900">es</span><span style="color:#000;font-weight:bold">:[</span><span style="color:#000">edi</span><span style="color:#000;font-weight:bold">]</span>
+<span style="color:#0000cf;font-weight:bold">00</span><span style="color:#000">CF152F</span>  <span style="color:#000">pop</span>         <span style="color:#000">ecx</span>
+<span style="color:#0000cf;font-weight:bold">00</span><span style="color:#000">CF1530</span>  <span style="color:#000">mov</span>         <span style="color:#000">dword</span> <span style="color:#000">ptr</span> <span style="color:#000;font-weight:bold">[</span><span style="color:#000">ebp</span><span style="color:#ce5c00;font-weight:bold">-</span><span style="color:#0000cf;font-weight:bold">8</span><span style="color:#000;font-weight:bold">],</span><span style="color:#000">ecx</span>
+<span style="color:#0000cf;font-weight:bold">00</span><span style="color:#000">CF1533</span>  <span style="color:#000">mov</span>         <span style="color:#000">eax</span><span style="color:#000;font-weight:bold">,</span><span style="color:#000">dword</span> <span style="color:#000">ptr</span> <span style="color:#000;font-weight:bold">[</span><span style="color:#204a87;font-weight:bold">this</span><span style="color:#000;font-weight:bold">]</span>
+<span style="color:#0000cf;font-weight:bold">00</span><span style="color:#000">CF1536</span>  <span style="color:#000">mov</span>         <span style="color:#000">dword</span> <span style="color:#000">ptr</span> <span style="color:#000;font-weight:bold">[</span><span style="color:#000">eax</span><span style="color:#000;font-weight:bold">],</span><span style="color:#000">offset</span> <span style="color:#000">Point</span><span style="color:#ce5c00;font-weight:bold">::</span><span style="color:#a40000">`</span><span style="color:#000">vftable</span><span style="color:#a40000">&#39;</span> <span style="color:#000;font-weight:bold">(</span><span style="color:#0000cf;font-weight:bold">0</span><span style="color:#000">CF5810h</span><span style="color:#000;font-weight:bold">)</span>
+<span style="color:#0000cf;font-weight:bold">00</span><span style="color:#000">CF153C</span>  <span style="color:#000">mov</span>         <span style="color:#000">eax</span><span style="color:#000;font-weight:bold">,</span><span style="color:#000">dword</span> <span style="color:#000">ptr</span> <span style="color:#000;font-weight:bold">[</span><span style="color:#204a87;font-weight:bold">this</span><span style="color:#000;font-weight:bold">]</span>
+<span style="color:#0000cf;font-weight:bold">00</span><span style="color:#000">CF153F</span>  <span style="color:#000">fld</span>         <span style="color:#000">dword</span> <span style="color:#000">ptr</span> <span style="color:#000;font-weight:bold">[</span><span style="color:#000">x</span><span style="color:#000;font-weight:bold">]</span>
+<span style="color:#0000cf;font-weight:bold">00</span><span style="color:#000">CF1542</span>  <span style="color:#000">fstp</span>        <span style="color:#000">dword</span> <span style="color:#000">ptr</span> <span style="color:#000;font-weight:bold">[</span><span style="color:#000">eax</span><span style="color:#ce5c00;font-weight:bold">+</span><span style="color:#0000cf;font-weight:bold">4</span><span style="color:#000;font-weight:bold">]</span>
+<span style="color:#0000cf;font-weight:bold">00</span><span style="color:#000">CF1545</span>  <span style="color:#000">mov</span>         <span style="color:#000">eax</span><span style="color:#000;font-weight:bold">,</span><span style="color:#000">dword</span> <span style="color:#000">ptr</span> <span style="color:#000;font-weight:bold">[</span><span style="color:#204a87;font-weight:bold">this</span><span style="color:#000;font-weight:bold">]</span>
+<span style="color:#0000cf;font-weight:bold">00</span><span style="color:#000">CF1548</span>  <span style="color:#000">fld</span>         <span style="color:#000">dword</span> <span style="color:#000">ptr</span> <span style="color:#000;font-weight:bold">[</span><span style="color:#000">y</span><span style="color:#000;font-weight:bold">]</span>
+<span style="color:#0000cf;font-weight:bold">00</span><span style="color:#000">CF154B</span>  <span style="color:#000">fstp</span>        <span style="color:#000">dword</span> <span style="color:#000">ptr</span> <span style="color:#000;font-weight:bold">[</span><span style="color:#000">eax</span><span style="color:#ce5c00;font-weight:bold">+</span><span style="color:#0000cf;font-weight:bold">8</span><span style="color:#000;font-weight:bold">]</span>
+        <span style="color:#000;font-weight:bold">}</span>
+<span style="color:#0000cf;font-weight:bold">00</span><span style="color:#000">CF154E</span>  <span style="color:#000">mov</span>         <span style="color:#000">eax</span><span style="color:#000;font-weight:bold">,</span><span style="color:#000">dword</span> <span style="color:#000">ptr</span> <span style="color:#000;font-weight:bold">[</span><span style="color:#204a87;font-weight:bold">this</span><span style="color:#000;font-weight:bold">]</span>
+<span style="color:#0000cf;font-weight:bold">00</span><span style="color:#000">CF1551</span>  <span style="color:#000">pop</span>         <span style="color:#000">edi</span>
+<span style="color:#0000cf;font-weight:bold">00</span><span style="color:#000">CF1552</span>  <span style="color:#000">pop</span>         <span style="color:#000">esi</span>
+<span style="color:#0000cf;font-weight:bold">00</span><span style="color:#000">CF1553</span>  <span style="color:#000">pop</span>         <span style="color:#000">ebx</span>
+<span style="color:#0000cf;font-weight:bold">00</span><span style="color:#000">CF1554</span>  <span style="color:#000">mov</span>         <span style="color:#000">esp</span><span style="color:#000;font-weight:bold">,</span><span style="color:#000">ebp</span>
+<span style="color:#0000cf;font-weight:bold">00</span><span style="color:#000">CF1556</span>  <span style="color:#000">pop</span>         <span style="color:#000">ebp</span>
+<span style="color:#0000cf;font-weight:bold">00</span><span style="color:#000">CF1557</span>  <span style="color:#000">ret</span>         <span style="color:#0000cf;font-weight:bold">8</span>
+
+<span style="color:#8f5902;font-style:italic">//IDA反出来的结果：
+</span><span style="color:#8f5902;font-style:italic"></span><span style="color:#204a87;font-weight:bold">void</span> <span style="color:#000">__thiscall</span> <span style="color:#000">Point__Point</span><span style="color:#000;font-weight:bold">(</span><span style="color:#000">Point</span> <span style="color:#ce5c00;font-weight:bold">*</span><span style="color:#204a87;font-weight:bold">this</span><span style="color:#000;font-weight:bold">,</span> <span style="color:#204a87;font-weight:bold">float</span> <span style="color:#000">x</span><span style="color:#000;font-weight:bold">,</span> <span style="color:#204a87;font-weight:bold">float</span> <span style="color:#000">y</span><span style="color:#000;font-weight:bold">)</span>
+<span style="color:#000;font-weight:bold">{</span>
+  <span style="color:#204a87;font-weight:bold">float</span> <span style="color:#ce5c00;font-weight:bold">*</span><span style="color:#000">v3</span><span style="color:#000;font-weight:bold">;</span> <span style="color:#8f5902;font-style:italic">// [sp+D0h] [bp-8h]@1
+</span><span style="color:#8f5902;font-style:italic"></span>
+  <span style="color:#000">v3</span> <span style="color:#ce5c00;font-weight:bold">=</span> <span style="color:#000;font-weight:bold">(</span><span style="color:#204a87;font-weight:bold">float</span> <span style="color:#ce5c00;font-weight:bold">*</span><span style="color:#000;font-weight:bold">)</span><span style="color:#204a87;font-weight:bold">this</span><span style="color:#000;font-weight:bold">;</span>
+  <span style="color:#204a87;font-weight:bold">this</span><span style="color:#ce5c00;font-weight:bold">-&gt;</span><span style="color:#000">vtable</span> <span style="color:#ce5c00;font-weight:bold">=</span> <span style="color:#ce5c00;font-weight:bold">&amp;</span><span style="color:#000">Point___vftable_</span><span style="color:#000;font-weight:bold">;</span>
+  <span style="color:#000">v3</span><span style="color:#000;font-weight:bold">[</span><span style="color:#0000cf;font-weight:bold">1</span><span style="color:#000;font-weight:bold">]</span> <span style="color:#ce5c00;font-weight:bold">=</span> <span style="color:#000">x</span><span style="color:#000;font-weight:bold">;</span>
+  <span style="color:#000">v3</span><span style="color:#000;font-weight:bold">[</span><span style="color:#0000cf;font-weight:bold">2</span><span style="color:#000;font-weight:bold">]</span> <span style="color:#ce5c00;font-weight:bold">=</span> <span style="color:#000">y</span><span style="color:#000;font-weight:bold">;</span>
+<span style="color:#000;font-weight:bold">}</span>
+</code></pre></div><p>编译器利用默认的<code>ecx</code>保存了对象的首地址,并以寄存器传参的方式传递给成员函数,这就是<code>this</code>指针的由来,所有的成员函数(非静态的成员函数)都隐藏一个这个的参数,通常将这样的默认的调用约定称为<code>thiscall</code>.<br>
+在成员函数里面中访问数据变量也是通过this指针间接访问的，这就是为什么在成员函数内可以直接使用数据成员的原因.</p>
+<hr>
+<blockquote>
+<p>总结下:</p>
+</blockquote>
+<ul>
+<li>目前只写完啦函数栈相关的, 后续加油写<code>堆</code>, <code>全局变量</code>, <code>静态变量</code>.</li>
+<li><code>c++</code>对象模型有点多,有时间继续写点备忘.</li>
+</ul>
+<p>这条路终究是实战出来的,写点偏底层的东西,希望诸君能看的更透彻.</p>
+<h3 id="以梦为马-不负韶华">以梦为马, 不负韶华.</h3>
+<hr>
+<blockquote>
+<p>下面是两道测试题,是时候展现下真正的实力啦.</p>
+</blockquote>
+<ol>
+<li>构造一个字符串让这个密码验证正确（环境gcc and vc6.0）</li>
+</ol>
+<div class="highlight"><pre tabindex="0" style="background-color:#f8f8f8;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-cpp" data-lang="cpp">
+<span style="color:#8f5902;font-style:italic">#include</span> <span style="color:#8f5902;font-style:italic">&lt;string.h&gt;</span><span style="color:#8f5902;font-style:italic">
+</span><span style="color:#8f5902;font-style:italic">#define PASSWORD &#34;1234567&#34;
+</span><span style="color:#8f5902;font-style:italic"></span>
+<span style="color:#204a87;font-weight:bold">int</span> <span style="color:#000">verifyPassword</span><span style="color:#000;font-weight:bold">(</span><span style="color:#204a87;font-weight:bold">char</span> <span style="color:#ce5c00;font-weight:bold">*</span><span style="color:#000">password</span><span style="color:#000;font-weight:bold">)</span>
+<span style="color:#000;font-weight:bold">{</span>
+	<span style="color:#204a87;font-weight:bold">int</span> <span style="color:#000">authent</span><span style="color:#000;font-weight:bold">;</span>
+	<span style="color:#204a87;font-weight:bold">char</span> <span style="color:#000">buffer</span><span style="color:#000;font-weight:bold">[</span><span style="color:#0000cf;font-weight:bold">8</span><span style="color:#000;font-weight:bold">];</span>
+	<span style="color:#000">authent</span> <span style="color:#ce5c00;font-weight:bold">=</span> <span style="color:#000">strcmp</span><span style="color:#000;font-weight:bold">(</span><span style="color:#000">password</span><span style="color:#000;font-weight:bold">,</span> <span style="color:#000">PASSWORD</span><span style="color:#000;font-weight:bold">);</span>
+	<span style="color:#000">strcpy</span><span style="color:#000;font-weight:bold">(</span><span style="color:#000">buffer</span><span style="color:#000;font-weight:bold">,</span> <span style="color:#000">password</span><span style="color:#000;font-weight:bold">);</span>
+	<span style="color:#204a87;font-weight:bold">return</span> <span style="color:#000">authent</span><span style="color:#000;font-weight:bold">;</span>
+<span style="color:#000;font-weight:bold">}</span>
+
+<span style="color:#204a87;font-weight:bold">void</span> <span style="color:#000">testPassword</span><span style="color:#000;font-weight:bold">()</span>
+<span style="color:#000;font-weight:bold">{</span>
+	<span style="color:#204a87;font-weight:bold">int</span> <span style="color:#000">flag</span> <span style="color:#ce5c00;font-weight:bold">=</span> <span style="color:#0000cf;font-weight:bold">0</span><span style="color:#000;font-weight:bold">;</span>
+	<span style="color:#204a87;font-weight:bold">char</span> <span style="color:#000">password</span><span style="color:#000;font-weight:bold">[</span><span style="color:#0000cf;font-weight:bold">1024</span><span style="color:#000;font-weight:bold">];</span>
+	<span style="color:#204a87;font-weight:bold">while</span> <span style="color:#000;font-weight:bold">(</span><span style="color:#204a87">true</span><span style="color:#000;font-weight:bold">)</span>
+	<span style="color:#000;font-weight:bold">{</span>
+		<span style="color:#000">printf</span><span style="color:#000;font-weight:bold">(</span><span style="color:#4e9a06">&#34;please input passwrod:&#34;</span><span style="color:#000;font-weight:bold">);</span>
+		<span style="color:#000">scanf</span><span style="color:#000;font-weight:bold">(</span><span style="color:#4e9a06">&#34;%s&#34;</span><span style="color:#000;font-weight:bold">,</span> <span style="color:#000">password</span><span style="color:#000;font-weight:bold">);</span>
+		<span style="color:#000">flag</span> <span style="color:#ce5c00;font-weight:bold">=</span> <span style="color:#000">verifyPassword</span><span style="color:#000;font-weight:bold">(</span><span style="color:#000">password</span><span style="color:#000;font-weight:bold">);</span>
+
+		<span style="color:#204a87;font-weight:bold">if</span> <span style="color:#000;font-weight:bold">(</span><span style="color:#000">flag</span><span style="color:#000;font-weight:bold">)</span>
+		<span style="color:#000;font-weight:bold">{</span>
+			<span style="color:#000">printf</span><span style="color:#000;font-weight:bold">(</span><span style="color:#4e9a06">&#34;incorrect password</span><span style="color:#4e9a06">\n\n</span><span style="color:#4e9a06">&#34;</span><span style="color:#000;font-weight:bold">);</span>
+		<span style="color:#000;font-weight:bold">}</span>
+		<span style="color:#204a87;font-weight:bold">else</span>
+		<span style="color:#000;font-weight:bold">{</span>
+			<span style="color:#000">printf</span><span style="color:#000;font-weight:bold">(</span><span style="color:#4e9a06">&#34;Congratuation!&#34;</span><span style="color:#000;font-weight:bold">);</span>
+			<span style="color:#204a87;font-weight:bold">break</span><span style="color:#000;font-weight:bold">;</span>
+		<span style="color:#000;font-weight:bold">}</span>
+	<span style="color:#000;font-weight:bold">}</span>
+<span style="color:#000;font-weight:bold">}</span>
+</code></pre></div><ol start="2">
+<li>分析函数hack过程（测试环境最好gcc 关闭栈保护）</li>
+</ol>
+<div class="highlight"><pre tabindex="0" style="background-color:#f8f8f8;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-cpp" data-lang="cpp"><span style="color:#8f5902;font-style:italic">// gcc -g -fno-stack-protector -z exestack -o flow.exe stackoverflow.c
+</span><span style="color:#8f5902;font-style:italic">// stackoverflow.c
+</span><span style="color:#8f5902;font-style:italic"></span><span style="color:#8f5902;font-style:italic">#include</span> <span style="color:#8f5902;font-style:italic">&lt;stdio.h&gt;</span><span style="color:#8f5902;font-style:italic">
+</span><span style="color:#8f5902;font-style:italic"></span><span style="color:#204a87;font-weight:bold">int</span> <span style="color:#000">i</span> <span style="color:#ce5c00;font-weight:bold">=</span> <span style="color:#0000cf;font-weight:bold">0</span><span style="color:#000;font-weight:bold">;</span>
+<span style="color:#204a87;font-weight:bold">void</span> <span style="color:#000">attack</span><span style="color:#000;font-weight:bold">()</span>
+<span style="color:#000;font-weight:bold">{</span>
+    <span style="color:#000">printf</span><span style="color:#000;font-weight:bold">(</span><span style="color:#4e9a06">&#34;hello, this&#39;s attack function</span><span style="color:#4e9a06">\n</span><span style="color:#4e9a06">&#34;</span><span style="color:#000;font-weight:bold">);</span>
+<span style="color:#000;font-weight:bold">}</span>
+<span style="color:#204a87;font-weight:bold">void</span> <span style="color:#000">get</span><span style="color:#000;font-weight:bold">()</span>
+<span style="color:#000;font-weight:bold">{</span>
+    <span style="color:#204a87;font-weight:bold">int</span> <span style="color:#000">a</span> <span style="color:#ce5c00;font-weight:bold">=</span> <span style="color:#0000cf;font-weight:bold">0</span><span style="color:#000;font-weight:bold">;</span>
+    <span style="color:#204a87;font-weight:bold">unsigned</span> <span style="color:#204a87;font-weight:bold">char</span> <span style="color:#000">ch</span><span style="color:#000;font-weight:bold">[</span><span style="color:#0000cf;font-weight:bold">3</span><span style="color:#000;font-weight:bold">];</span>
+    <span style="color:#204a87;font-weight:bold">int</span> <span style="color:#ce5c00;font-weight:bold">*</span><span style="color:#000">ret</span> <span style="color:#ce5c00;font-weight:bold">=</span> <span style="color:#0000cf;font-weight:bold">0</span><span style="color:#000;font-weight:bold">;</span>
+    <span style="color:#000">printf</span><span style="color:#000;font-weight:bold">(</span><span style="color:#4e9a06">&#34;%x</span><span style="color:#4e9a06">\n</span><span style="color:#4e9a06">%x</span><span style="color:#4e9a06">\n</span><span style="color:#4e9a06">&#34;</span><span style="color:#000;font-weight:bold">,</span> <span style="color:#ce5c00;font-weight:bold">&amp;</span><span style="color:#000">a</span><span style="color:#000;font-weight:bold">,</span> <span style="color:#ce5c00;font-weight:bold">&amp;</span><span style="color:#000">ch</span><span style="color:#000;font-weight:bold">);</span>
+    <span style="color:#8f5902;font-style:italic">//while((ch[i++] = getchar()) != &#39;\n&#39;);
+</span><span style="color:#8f5902;font-style:italic"></span>    <span style="color:#8f5902;font-style:italic">//while(scanf(&#34;%d&#34;, ch[i++]));
+</span><span style="color:#8f5902;font-style:italic"></span>    <span style="color:#204a87;font-weight:bold">while</span><span style="color:#000;font-weight:bold">(</span> <span style="color:#000">i</span> <span style="color:#ce5c00;font-weight:bold">&lt;</span> <span style="color:#0000cf;font-weight:bold">23</span><span style="color:#000;font-weight:bold">)</span>
+        <span style="color:#000">ch</span><span style="color:#000;font-weight:bold">[</span><span style="color:#000">i</span><span style="color:#ce5c00;font-weight:bold">++</span><span style="color:#000;font-weight:bold">]</span> <span style="color:#ce5c00;font-weight:bold">=</span> <span style="color:#0000cf;font-weight:bold">0x90</span><span style="color:#000;font-weight:bold">;</span>
+    <span style="color:#000">ch</span><span style="color:#000;font-weight:bold">[</span><span style="color:#000">i</span><span style="color:#ce5c00;font-weight:bold">++</span><span style="color:#000;font-weight:bold">]</span> <span style="color:#ce5c00;font-weight:bold">=</span> <span style="color:#000;font-weight:bold">(</span><span style="color:#204a87;font-weight:bold">char</span><span style="color:#000;font-weight:bold">)(</span><span style="color:#204a87;font-weight:bold">int</span><span style="color:#000;font-weight:bold">)</span><span style="color:#ce5c00;font-weight:bold">&amp;</span><span style="color:#000">attack</span> <span style="color:#ce5c00;font-weight:bold">%</span> <span style="color:#0000cf;font-weight:bold">256</span><span style="color:#000;font-weight:bold">;</span>
+    <span style="color:#000">ch</span><span style="color:#000;font-weight:bold">[</span><span style="color:#000">i</span><span style="color:#ce5c00;font-weight:bold">++</span><span style="color:#000;font-weight:bold">]</span> <span style="color:#ce5c00;font-weight:bold">=</span> <span style="color:#000;font-weight:bold">(</span><span style="color:#204a87;font-weight:bold">char</span><span style="color:#000;font-weight:bold">)((</span><span style="color:#204a87;font-weight:bold">int</span><span style="color:#000;font-weight:bold">)</span><span style="color:#ce5c00;font-weight:bold">&amp;</span><span style="color:#000">attack</span> <span style="color:#ce5c00;font-weight:bold">&gt;&gt;</span> <span style="color:#0000cf;font-weight:bold">8</span><span style="color:#000;font-weight:bold">)</span> <span style="color:#ce5c00;font-weight:bold">%</span> <span style="color:#0000cf;font-weight:bold">256</span><span style="color:#000;font-weight:bold">;</span>
+    <span style="color:#000">ch</span><span style="color:#000;font-weight:bold">[</span><span style="color:#000">i</span><span style="color:#ce5c00;font-weight:bold">++</span><span style="color:#000;font-weight:bold">]</span> <span style="color:#ce5c00;font-weight:bold">=</span> <span style="color:#000;font-weight:bold">(</span><span style="color:#204a87;font-weight:bold">char</span><span style="color:#000;font-weight:bold">)((</span><span style="color:#204a87;font-weight:bold">int</span><span style="color:#000;font-weight:bold">)</span><span style="color:#ce5c00;font-weight:bold">&amp;</span><span style="color:#000">attack</span> <span style="color:#ce5c00;font-weight:bold">&gt;&gt;</span> <span style="color:#0000cf;font-weight:bold">16</span><span style="color:#000;font-weight:bold">)</span> <span style="color:#ce5c00;font-weight:bold">%</span> <span style="color:#0000cf;font-weight:bold">256</span><span style="color:#000;font-weight:bold">;</span>
+    <span style="color:#000">ch</span><span style="color:#000;font-weight:bold">[</span><span style="color:#000">i</span><span style="color:#ce5c00;font-weight:bold">++</span><span style="color:#000;font-weight:bold">]</span> <span style="color:#ce5c00;font-weight:bold">=</span> <span style="color:#000;font-weight:bold">(</span><span style="color:#204a87;font-weight:bold">char</span><span style="color:#000;font-weight:bold">)((</span><span style="color:#204a87;font-weight:bold">int</span><span style="color:#000;font-weight:bold">)</span><span style="color:#ce5c00;font-weight:bold">&amp;</span><span style="color:#000">attack</span> <span style="color:#ce5c00;font-weight:bold">&gt;&gt;</span> <span style="color:#0000cf;font-weight:bold">24</span><span style="color:#000;font-weight:bold">)</span> <span style="color:#ce5c00;font-weight:bold">%</span> <span style="color:#0000cf;font-weight:bold">256</span><span style="color:#000;font-weight:bold">;</span>
+    <span style="color:#000">printf</span><span style="color:#000;font-weight:bold">(</span><span style="color:#4e9a06">&#34;i = %d %d %s</span><span style="color:#4e9a06">\n</span><span style="color:#4e9a06">&#34;</span><span style="color:#000;font-weight:bold">,</span> <span style="color:#000">i</span><span style="color:#000;font-weight:bold">,</span> <span style="color:#000">a</span><span style="color:#000;font-weight:bold">,</span> <span style="color:#000">ch</span><span style="color:#000;font-weight:bold">);</span>
+    <span style="color:#8f5902;font-style:italic">//ret = &amp;i + 5;
+</span><span style="color:#8f5902;font-style:italic"></span>    <span style="color:#8f5902;font-style:italic">//*ret -= 12;
+</span><span style="color:#8f5902;font-style:italic"></span>    <span style="color:#8f5902;font-style:italic">//return 0;
+</span><span style="color:#8f5902;font-style:italic"></span><span style="color:#000;font-weight:bold">}</span>
+<span style="color:#204a87;font-weight:bold">int</span> <span style="color:#000">main</span><span style="color:#000;font-weight:bold">()</span>
+<span style="color:#000;font-weight:bold">{</span>
+    <span style="color:#8f5902;font-style:italic">//int i = 0;
+</span><span style="color:#8f5902;font-style:italic"></span>    <span style="color:#000">get</span><span style="color:#000;font-weight:bold">();</span>
+    <span style="color:#000">printf</span><span style="color:#000;font-weight:bold">(</span><span style="color:#4e9a06">&#34;hello</span><span style="color:#4e9a06">\n</span><span style="color:#4e9a06">&#34;</span><span style="color:#000;font-weight:bold">);</span>
+    <span style="color:#000">printf</span><span style="color:#000;font-weight:bold">(</span><span style="color:#4e9a06">&#34;%d</span><span style="color:#4e9a06">\n</span><span style="color:#4e9a06">&#34;</span><span style="color:#000;font-weight:bold">,</span> <span style="color:#000">i</span><span style="color:#000;font-weight:bold">);</span>
+    <span style="color:#204a87;font-weight:bold">return</span> <span style="color:#0000cf;font-weight:bold">0</span><span style="color:#000;font-weight:bold">;</span>
+<span style="color:#000;font-weight:bold">}</span>
+</code></pre></div><hr>
+<blockquote>
+<p>参考学习资料：</p>
+<ul>
+<li>&lt;深入理解计算机系统&gt;,&lt;卓越之道&gt;, &lt;黑客反汇编解密&gt;</li>
+<li>&lt;软件调试&gt;,&lt;加密与解密&gt;(段刚著), &lt;黑客调试技术揭秘&gt;</li>
+<li>&lt;Linker &amp; Loader&gt;</li>
+<li>&lt;自己动手写操作系统&gt;</li>
+<li>
+<a href="http://coolshell.cn/articles/11466.html" target="_blank" rel="noopener">整形溢出</a></li>
+</ul>
+</blockquote>
+        </div>
+        
+
+<footer>
+  <p class="meta">
+    <span class="byline author vcard">Posted by <span class="fn"></span></span>
+    
+    <time>Apr 25, 2020</time>
+    
+      <span class="categories">
+        Tags:
+        
+          <a class="category" href="https://blackkaiserxjc.github.io/tags/%e6%8a%80%e6%9c%af">技术</a>  
+    
+    </span>
+  </p>
+
+  
+
+  <p class="meta">
+    
+        <a class="basic-alignment left" href="https://blackkaiserxjc.github.io/post/c-17-lambda/" title="c&#43;&#43;11 lambda如何实现的?">c&#43;&#43;11 lambda如何实现的?</a>
+    
+
+    
+  </p>
+  
+</footer>
+
+      </article>
+    </div>
+    
+
+<aside class="sidebar thirds">
+  <section class="first odd">
+
+    
+      <h1>Sidebar Header</h1>
+    
+
+    <p>
+      
+        <p>Here&rsquo;s a <a href="https://www.google.com">link to google</a></p>
+<p>New paragraph</p>
+<p>Another paragraph which has two spaces in the end to create a new line using markdown<br>
+New line but not a new paragraph</p>
+
+      
+    </p>
+  </section>
+
+
+
+  
+  <ul class="sidebar-nav">
+    <li class="sidebar-nav-item">
+      <a target="_blank" rel="noopener noreferrer" href="https://github.com/parsiya/Hugo-Octopress" title="https://github.com/parsiya/Hugo-Octopress"><i class="fa fa-github fa-3x"></i></a>
+      <a target="_blank" rel="noopener noreferrer" href="https://bitbucket.org/parsiya/" title="https://bitbucket.org/parsiya/"><i class="fa fa-bitbucket fa-3x"></i></a>
+      
+      <a target="_blank" rel="noopener noreferrer" href="https://twitter.com/cryptogangsta/" title="https://twitter.com/cryptogangsta/"><i class="fa fa-twitter fa-3x"></i></a>
+      
+         
+      
+      
+      
+      
+      
+      
+      
+
+    
+    
+    </li>
+  </ul>
+
+  
+
+  
+    
+      <section class="odd">
+        
+          <h1>Sidebar Links</h1>
+        
+        
+      </section>
+    
+  
+
+  
+  
+  
+    
+      <section class="even">
+        <h1>Recent Posts</h1>
+        <ul id="recent_posts">
+          
+          
+            
+              <li class="post">
+                <a href="/post/c-cpp-function/">C/C&#43;&#43;函数栈</a>
+              </li>
+            
+          
+            
+          
+            
+              <li class="post">
+                <a href="/post/c-17-lambda/">c&#43;&#43;11 lambda如何实现的?</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/post/hexo-image/">如何在Hexo中添加本地图片</a>
+              </li>
+            
+          
+        </ul>
+      </section>
+    
+  
+</aside>
+
+  </div>
+</div>
+
+    <footer role="contentinfo">
+      <p>Copyright &copy; 2021  - <a href="https://blackkaiserxjc.github.io/license/">License</a> -
+        <span class="credit">Powered by <a target="_blank" href="https://gohugo.io" rel="noopener noreferrer">Hugo</a> and <a target="_blank" href="https://github.com/parsiya/hugo-octopress/" rel="noopener noreferrer">Hugo-Octopress</a> theme.
+      </p>
+    </footer>
+
+    
+    
+
+
+
+    
+    
+    
+
+    
+  </body>
+</html>
+
